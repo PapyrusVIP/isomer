@@ -1,11 +1,10 @@
-Architecture
-===
+# Architecture
 
-tubular consists of a BPF program that attaches to the sk_lookup hook in the
-kernel and userspace Go code which manages the BPF program. `tubectl` wraps
+isomer consists of a BPF program that attaches to the sk_lookup hook in the
+kernel and userspace Go code which manages the BPF program. `isomctl` wraps
 both with a CLI that is easy to distribute.
 
-`tubectl` manages two kinds of objects: bindings and sockets. A binding
+`isomctl` manages two kinds of objects: bindings and sockets. A binding
 encodes a rule against which an incoming packet is matched. A socket is a reference
 to a TCP or UDP socket that can accept new connections or packets.
 
@@ -15,10 +14,10 @@ to find the correct socket.
 
 ![TCP 127.0.0.1:80 -(binding lookup)-> "foo" -(socket lookup)-> socket #XYZ](./packet-label-socket.svg)
 
-To direct HTTP traffic destined for 127.0.0.1 to the label `foo` we use `tubectl bind`:
+To direct HTTP traffic destined for 127.0.0.1 to the label `foo` we use `isomctl bind`:
 
 ```
-$ sudo tubectl bind "foo" tcp 127.0.0.1 80
+$ sudo isomctl bind "foo" tcp 127.0.0.1 80
 ```
 
 Due to the flexibility of eBPF we can have much more powerful constructs than
@@ -26,13 +25,13 @@ the BSD API. For example, we can redirect connections to all IPs in
 127.0.0.0/24:
 
 ```
-$ sudo tubectl bind "bar" tcp 127.0.0.0/24 80
+$ sudo isomctl bind "bar" tcp 127.0.0.0/24 80
 ```
 
 Alternatively, we could redirect all ports on a single IP:
 
 ```
-$ sudo tubectl bind "baz" tcp 127.0.0.2 0
+$ sudo isomctl bind "baz" tcp 127.0.0.2 0
 ```
 
 A side effect of this power is that it's possible to create bindings that "overlap":
@@ -44,7 +43,7 @@ A side effect of this power is that it's possible to create bindings that "overl
 
 The first binding says that HTTP traffic to localhost should go to `foo`, while
 the second asserts that HTTP traffic in the localhost subnet should go to `bar`.
-This creates a contradiction, which binding should we choose? tubular resolves
+This creates a contradiction, which binding should we choose? isomer resolves
 this by defining precedence rules for bindings:
 
 1. A prefix with a longer mask is more specific, e.g. 127.0.0.1/32 wins over
@@ -64,12 +63,12 @@ creates a TCP listening socket bound to port 80. To configure traffic redirectio
 with sk_lookup to the nginx listening socket we need gain access to it.
 
 A fairly well known solution is to make processes cooperate by passing socket
-file descriptors via [SCM_RIGHTS][] messages to a tubular daemon. That daemon can
+file descriptors via [SCM_RIGHTS][] messages to a isomer daemon. That daemon can
 then take the necessary steps to hook up the socket with sk_lookup. This approach
 has several drawbacks:
 
 1. Requires modifying processes to send SCM_RIGHTS
-2. Requires a tubular daemon, which may crash
+2. Requires a isomer daemon, which may crash
 
 There is another way of getting at sockets by using systemd, provided
 [socket activation][] is used. It works by creating an additional service unit
@@ -82,10 +81,10 @@ Requisite=foo.socket
 [Service]
 Type=oneshot
 Sockets=foo.socket
-ExecStart=tubectl register "foo"
+ExecStart=isomctl register "foo"
 ```
 
-Since we can rely on systemd to execute `tubectl` at the correct times we don't
+Since we can rely on systemd to execute `isomctl` at the correct times we don't
 need a daemon any more. However, the reality is that a lot of popular software
 doesn't use systemd socket activation, nginx included. Dealing with systemd sockets
 is complicated and doesn't invite experimentation. Which brings us to the
@@ -102,7 +101,7 @@ to find the TCP socket bound to 127.0.0.1 port 8080 in the nginx process and
 register it under the "foo" label:
 
 ```
-$ sudo tubectl register-pid "foo" $(pidof nginx) tcp 127.0.0.1 8080
+$ sudo isomctl register-pid "foo" $(pidof nginx) tcp 127.0.0.1 8080
 ```
 
 It's easy to wire this up using systemd's [ExecStartPost][] if the need arises.
@@ -111,16 +110,16 @@ It's easy to wire this up using systemd's [ExecStartPost][] if the need arises.
 [Service]
 Type=forking # or notify
 ExecStart=/path/to/some/command
-ExecStartPost=tubectl register-pid $MAINPID foo tcp 127.0.0.1 8080
+ExecStartPost=isomctl register-pid $MAINPID foo tcp 127.0.0.1 8080
 ```
 
 ## Managing and persisting state
 
-tubular takes over functionality that has traditionally been
+isomer takes over functionality that has traditionally been
 reserved to the OS's networking stack. This is very powerful but with that
 power comes the requirement for robustness. The kernel might well start rejecting
-connections if tubular were to crash. As a result, there is no persistent
-daemon required to operate tubular. Instead tubectl is used to modify all
+connections if isomer were to crash. As a result, there is no persistent
+daemon required to operate isomer. Instead isomctl is used to modify all
 necessary state in [BPF key / value data structures also known as maps][maps],
 which are persisted into a subdirectory of /sys/fs/bpf:
 
@@ -268,11 +267,11 @@ State      Recv-Q      Send-Q           Local Address:Port           Peer Addres
 LISTEN     0           128                  127.0.0.1:ipp                 0.0.0.0:*
 ```
 
-With tubular in the picture this output is not accurate any more. `tubectl bindings`
+With isomer in the picture this output is not accurate any more. `isomctl bindings`
 makes up for this shortcoming:
 
 ```
-$ sudo tubectl bindings tcp 127.0.0.1
+$ sudo isomctl bindings tcp 127.0.0.1
 Bindings:
  protocol       prefix port label
       tcp 127.0.0.1/32   80   foo
@@ -283,13 +282,13 @@ user to run. While this is acceptable for casual inspection by a human operator,
 it's a deal breaker for observability via pull-based systems like Prometheus.
 The usual approach is to expose metrics via a HTTP server, which would have to
 run with elevated privileges and be accessible remotely. Instead, BPF gives us
-the tools to enable read-only access to tubular state with minimal privileges.
+the tools to enable read-only access to isomer state with minimal privileges.
 
 The key is to carefully set file ownership and mode for state in /sys/fs/bpf.
 Creating and opening files in /sys/fs/bpf uses [BPF_OBJ_PIN and BPF_OBJ_GET][obj pinning].
 Calling BPF_OBJ_GET with BPF_F_RDONLY is roughly equivalent to open(O_RDONLY)
 and allows accessing state in a read-only fashion, provided the file permissions
-are correct. tubular gives the owner full access but restricts read-only access
+are correct. isomer gives the owner full access but restricts read-only access
 to the group:
 
 ```
@@ -299,16 +298,16 @@ total 0
 -rw-r----- 1 root root 0 Feb  2 13:19 destination_metrics
 ```
 
-It's easy to choose which user and group should own state when loading tubular:
+It's easy to choose which user and group should own state when loading isomer:
 
 ```
-$ sudo -u root -g tubular tubectl load
+$ sudo -u root -g isomer isomctl load
 created dispatcher in /sys/fs/bpf/4026532024_dispatcher
 loaded dispatcher into /proc/self/ns/net
 $ sudo ls -l /sys/fs/bpf/4026532024_dispatcher | head -n 3
 total 0
--rw-r----- 1 root tubular 0 Feb  2 13:42 bindings
--rw-r----- 1 root tubular 0 Feb  2 13:42 destination_metrics
+-rw-r----- 1 root isomer 0 Feb  2 13:42 bindings
+-rw-r----- 1 root isomer 0 Feb  2 13:42 destination_metrics
 ```
 
 There is one more obstacle, [systemd mounts /sys/fs/bpf][systemd bpffs]
@@ -323,7 +322,7 @@ mode of '/sys/fs/bpf' changed from 0700 (rwx------) to 0701 (rwx-----x)
 Finally, we can export metrics without privileges:
 
 ```
-$ sudo -u nobody -g tubular tubectl metrics 127.0.0.1 8080
+$ sudo -u nobody -g isomer isomctl metrics 127.0.0.1 8080
 Listening on 127.0.0.1:8080
 ^C
 ```
@@ -334,7 +333,7 @@ require CAP_BPF.
 
 ## Updating the BPF program
 
-tubular is distributed as a single binary, but really consists of two
+isomer is distributed as a single binary, but really consists of two
 pieces of code with widely differing lifetimes. The BPF program is loaded into
 the kernel once and then may be active for weeks or months, until it is explicitly
 replaced. Like maps, the program (and link, see below) is persisted into /sys/fs/bpf:
@@ -350,10 +349,10 @@ The user space code is executed for seconds at a time and is replaced whenever
 the binary on disk changes. This means that user space has to be able to deal
 with an "old" BPF program in the kernel somehow. The simplest way to achieve
 this is to compare what is loaded into the kernel with the BPF shipped as
-part of `tubectl`. If the two don't match we return an error:
+part of `isomctl`. If the two don't match we return an error:
 
 ```
-$ sudo tubectl bind foo tcp 127.0.0.1 80
+$ sudo isomctl bind foo tcp 127.0.0.1 80
 Error: bind: can't open dispatcher: loaded program #158 has differing tag: "938c70b5a8956ff2" doesn't match "e007bfbbf37171f0"
 ```
 
@@ -375,12 +374,12 @@ the program will execute the next time the hook is executed. By updating the
 link we can change the program on the fly.
 
 ```
-$ sudo tubectl upgrade
+$ sudo isomctl upgrade
 Upgraded dispatcher to 2022.1.0-dev, program ID #159
 $ sudo bpftool prog list id 159
 159: sk_lookup  name dispatcher  tag e007bfbbf37171f0
 ...
-$ sudo tubectl bind foo tcp 127.0.0.1 80
+$ sudo isomctl bind foo tcp 127.0.0.1 80
 bound foo#tcp:[127.0.0.1/32]:80
 ```
 

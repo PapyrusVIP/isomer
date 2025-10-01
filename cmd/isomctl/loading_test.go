@@ -4,27 +4,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 )
 
 func TestLoadUnload(t *testing.T) {
 	netns := testutil.NewNetNS(t)
 
-	load := tubectlTestCall{
+	load := isomctlTestCall{
 		NetNS:     netns,
 		Cmd:       "load",
 		Effective: internal.CreateCapabilities,
 	}
 	load.MustRun(t)
 
-	mustTestTubectl(t, netns, "unload")
+	mustTestIsomctl(t, netns, "unload")
 }
 
 func TestUpgrade(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
-	upgrade := tubectlTestCall{
+	upgrade := isomctlTestCall{
 		NetNS:     netns,
 		Cmd:       "upgrade",
 		Effective: internal.CreateCapabilities,

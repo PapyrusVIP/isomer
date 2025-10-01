@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/log"
-	"github.com/cloudflare/tubular/internal/sysconn"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/log"
+	"github.com/PapyrusVIP/isomer/internal/sysconn"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"golang.org/x/sys/unix"
@@ -27,7 +27,7 @@ func init() {
 }
 
 func TestHelp(t *testing.T) {
-	cmd := tubectlTestCall{
+	cmd := isomctlTestCall{
 		Args: []string{"-help"},
 	}
 
@@ -52,8 +52,8 @@ func TestSubcommandHelp(t *testing.T) {
 	}
 }
 
-func testTubectl(tb testing.TB, netns ns.NetNS, cmd string, args ...string) (*bytes.Buffer, error) {
-	tc := tubectlTestCall{
+func testIsomctl(tb testing.TB, netns ns.NetNS, cmd string, args ...string) (*bytes.Buffer, error) {
+	tc := isomctlTestCall{
 		NetNS: netns,
 		Cmd:   cmd,
 		Args:  args,
@@ -61,8 +61,8 @@ func testTubectl(tb testing.TB, netns ns.NetNS, cmd string, args ...string) (*by
 	return tc.Run(tb)
 }
 
-func mustTestTubectl(tb testing.TB, netns ns.NetNS, cmd string, args ...string) *bytes.Buffer {
-	tc := tubectlTestCall{
+func mustTestIsomctl(tb testing.TB, netns ns.NetNS, cmd string, args ...string) *bytes.Buffer {
+	tc := isomctlTestCall{
 		NetNS: netns,
 		Cmd:   cmd,
 		Args:  args,
@@ -136,8 +136,8 @@ type (
 	testFds []syscall.Conn
 )
 
-// tubectlTestCall represents a call to tubectl main function from a test.
-type tubectlTestCall struct {
+// isomctlTestCall represents a call to isomctl main function from a test.
+type isomctlTestCall struct {
 	// The network namespace from which to load the dispatcher.
 	NetNS ns.NetNS
 
@@ -148,13 +148,13 @@ type tubectlTestCall struct {
 	Cmd  string
 	Args []string
 
-	// Env specifies the enviroment variables for tubectl test call, which
+	// Env specifies the enviroment variables for isomctl test call, which
 	// values can be retrived with env.getenv. os.Getenv is unaffected by this
 	// setting.
 	Env testEnv
 
 	// ExtraFds specifies additonal open file descriptors to be returned by
-	// env.newFile for the duration tubectl test call. It does not include
+	// env.newFile for the duration isomctl test call. It does not include
 	// standard input, standard output, or standard error. If non-nil, entry i
 	// becomes file descriptor 3+i.
 	ExtraFds testFds
@@ -167,17 +167,17 @@ type tubectlTestCall struct {
 	Effective []cap.Value
 }
 
-func (tc *tubectlTestCall) Run(tb testing.TB) (*bytes.Buffer, error) {
+func (tc *isomctlTestCall) Run(tb testing.TB) (*bytes.Buffer, error) {
 	output := new(log.Buffer)
 	if err := tc.run(tb, context.Background(), output); err != nil {
 		return nil, err
 	}
 
-	tb.Logf("tubectl %s %s\n%s", tc.Cmd, strings.Join(tc.Args, " "), output)
+	tb.Logf("isomctl %s %s\n%s", tc.Cmd, strings.Join(tc.Args, " "), output)
 	return &output.Buffer, nil
 }
 
-func (tc *tubectlTestCall) run(tb testing.TB, ctx context.Context, output log.Logger) error {
+func (tc *isomctlTestCall) run(tb testing.TB, ctx context.Context, output log.Logger) error {
 	env := env{
 		stdout: output,
 		stderr: output,
@@ -221,7 +221,7 @@ func (tc *tubectlTestCall) run(tb testing.TB, ctx context.Context, output log.Lo
 
 	var err error
 	testutil.JoinNetNS(tb, exec, func() error {
-		err = tubectl(env, args)
+		err = isomctl(env, args)
 		return nil
 	}, tc.Effective...)
 
@@ -238,18 +238,18 @@ func (tc *tubectlTestCall) run(tb testing.TB, ctx context.Context, output log.Lo
 	return err
 }
 
-func (tc *tubectlTestCall) MustRun(tb testing.TB) *bytes.Buffer {
+func (tc *isomctlTestCall) MustRun(tb testing.TB) *bytes.Buffer {
 	tb.Helper()
 
 	output, err := tc.Run(tb)
 	if err != nil {
-		tb.Fatal("Error from tubectl:", err)
+		tb.Fatal("Error from isomctl:", err)
 	}
 
 	return output
 }
 
-func (tc *tubectlTestCall) Start(tb testing.TB) (stop func()) {
+func (tc *isomctlTestCall) Start(tb testing.TB) (stop func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tb.Cleanup(cancel)
 	done := make(chan struct{})
@@ -261,7 +261,7 @@ func (tc *tubectlTestCall) Start(tb testing.TB) (stop func()) {
 			select {
 			case <-ctx.Done():
 			default:
-				tb.Errorf("Error from tubectl %s: %s", tc.Cmd, err)
+				tb.Errorf("Error from isomctl %s: %s", tc.Cmd, err)
 			}
 		}
 	}()
@@ -273,14 +273,14 @@ func (tc *tubectlTestCall) Start(tb testing.TB) (stop func()) {
 	}
 }
 
-func (tc *tubectlTestCall) getenv(key string) string {
+func (tc *isomctlTestCall) getenv(key string) string {
 	if v, ok := tc.Env[key]; ok {
 		return v
 	}
 	return ""
 }
 
-func (tc *tubectlTestCall) newFile(fd uintptr, name string) *os.File {
+func (tc *isomctlTestCall) newFile(fd uintptr, name string) *os.File {
 	var (
 		firstExtraFd = uintptr(syscall.Stderr + 1)
 		lastExtraFd  = uintptr(syscall.Stderr + len(tc.ExtraFds))

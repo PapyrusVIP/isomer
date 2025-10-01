@@ -11,7 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/cloudflare/tubular/internal"
+	"github.com/PapyrusVIP/isomer/internal"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -150,7 +150,7 @@ func metrics(e *env, args ...string) error {
 		Expose metrics in prometheus export format.
 
 		Examples:
-		  $ tubectl metrics 127.0.0.1 8000
+		  $ isomctl metrics 127.0.0.1 8000
 		  THEN
 		  $ curl http://127.0.0.1:8000/metrics`
 
@@ -167,7 +167,7 @@ func metrics(e *env, args ...string) error {
 	}
 
 	// Create an instance of the prometheus registry and register all collectors.
-	reg, err := tubularRegistry(e)
+	reg, err := isomerRegistry(e)
 	if err != nil {
 		return err
 	}
@@ -198,12 +198,12 @@ func metrics(e *env, args ...string) error {
 	return nil
 }
 
-func tubularRegistry(e *env) (*prometheus.Registry, error) {
+func isomerRegistry(e *env) (*prometheus.Registry, error) {
 	reg := prometheus.NewRegistry()
-	tubularReg := prometheus.WrapRegistererWithPrefix("tubular_", reg)
+	isomerReg := prometheus.WrapRegistererWithPrefix("isomer_", reg)
 
 	coll := internal.NewCollector(e.stderr, e.netns, e.bpfFs)
-	if err := tubularReg.Register(coll); err != nil {
+	if err := isomerReg.Register(coll); err != nil {
 		return nil, fmt.Errorf("register collector: %s", err)
 	}
 

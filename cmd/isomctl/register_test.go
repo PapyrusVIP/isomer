@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/sysconn"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/sysconn"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"golang.org/x/sys/unix"
@@ -24,7 +24,7 @@ func TestSingleRegisterCommand(t *testing.T) {
 	run := func(t *testing.T, args []string, env testEnv, fds testFds) error {
 		mustLoadDispatcher(t, netns)
 
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS:    netns,
 			ExecNS:   netns,
 			Cmd:      "register",
@@ -32,7 +32,7 @@ func TestSingleRegisterCommand(t *testing.T) {
 			Env:      env,
 			ExtraFds: fds,
 		}
-		_, err := tubectl.Run(t)
+		_, err := isomctl.Run(t)
 
 		return err
 	}
@@ -161,13 +161,13 @@ func TestRegisterPID(t *testing.T) {
 	flags := testutil.FileStatusFlags(t, file)
 
 	t.Run("pid", func(t *testing.T) {
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS:  netns,
 			ExecNS: netns,
 			Cmd:    "register-pid",
 			Args:   []string{fmt.Sprint(child), "my-service", "tcp", "127.0.0.1", "8080"},
 		}
-		tubectl.MustRun(t)
+		isomctl.MustRun(t)
 	})
 
 	t.Run("file", func(t *testing.T) {
@@ -177,35 +177,35 @@ func TestRegisterPID(t *testing.T) {
 			t.Fatal("Can't write pid file:", err)
 		}
 
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS:  netns,
 			ExecNS: netns,
 			Cmd:    "register-pid",
 			Args:   []string{path, "my-service", "tcp", "127.0.0.1", "8080"},
 		}
-		tubectl.MustRun(t)
+		isomctl.MustRun(t)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS:  netns,
 			ExecNS: netns,
 			Cmd:    "register-pid",
 			Args:   []string{fmt.Sprint(child), "my-service", "udp", "127.0.0.1", "80"},
 		}
-		if _, err := tubectl.Run(t); !errors.Is(err, errBadArg) {
+		if _, err := isomctl.Run(t); !errors.Is(err, errBadArg) {
 			t.Error("Expected errBadArg, got", err)
 		}
 	})
 
 	t.Run("wrong netns", func(t *testing.T) {
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS: netns,
 			// No ExecNS
 			Cmd:  "register-pid",
 			Args: []string{fmt.Sprint(child), "my-service", "udp", "127.0.0.1", "8080"},
 		}
-		if _, err := tubectl.Run(t); err == nil {
+		if _, err := isomctl.Run(t); err == nil {
 			t.Error("Expected error")
 		}
 	})
@@ -300,7 +300,7 @@ func TestSequenceRegisterDifferentSocket(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		sk := testutil.Listen(t, netns, "tcp4", "")
 
-		tubectl := tubectlTestCall{
+		isomctl := isomctlTestCall{
 			NetNS:    netns,
 			ExecNS:   netns,
 			Cmd:      "register",
@@ -308,11 +308,11 @@ func TestSequenceRegisterDifferentSocket(t *testing.T) {
 			Env:      testEnv{"LISTEN_FDS": "1"},
 			ExtraFds: testFds{sk},
 		}
-		if _, err := tubectl.Run(t); err != nil {
+		if _, err := isomctl.Run(t); err != nil {
 			t.Fatal("register failed:", err)
 		}
 
-		if _, err := testTubectl(t, netns, "list"); err != nil {
+		if _, err := testIsomctl(t, netns, "list"); err != nil {
 			t.Fatal("list failed:", err)
 		}
 
@@ -324,7 +324,7 @@ func TestRegisterRefuseDifferentNamespace(t *testing.T) {
 	netns := mustReadyNetNS(t)
 	sk := testutil.Listen(t, netns, "tcp4", "")
 
-	tubectl := tubectlTestCall{
+	isomctl := isomctlTestCall{
 		NetNS: netns,
 		// ExecNS is not set
 		Cmd:      "register",
@@ -332,7 +332,7 @@ func TestRegisterRefuseDifferentNamespace(t *testing.T) {
 		Env:      testEnv{"LISTEN_FDS": "1"},
 		ExtraFds: testFds{sk},
 	}
-	if _, err := tubectl.Run(t); err == nil {
+	if _, err := isomctl.Run(t); err == nil {
 		t.Error("Didn't refuse a socket from a different namespace")
 	}
 }

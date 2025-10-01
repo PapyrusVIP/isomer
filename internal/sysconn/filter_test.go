@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal/sysconn"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/sysconn"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/google/go-cmp/cmp"
 	"inet.af/netaddr"
@@ -177,7 +177,7 @@ func TestLocalAddress(t *testing.T) {
 		})
 	}
 
-	file, err := ioutil.TempFile("", "tubular")
+	file, err := ioutil.TempFile("", "isomer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestLocalAddress(t *testing.T) {
 }
 
 func TestListeningSocket(t *testing.T) {
-	file, err := ioutil.TempFile("", "tubular")
+	file, err := ioutil.TempFile("", "isomer")
 	if err != nil {
 		t.Fatal(err)
 	}

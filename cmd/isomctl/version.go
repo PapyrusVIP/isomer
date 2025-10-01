@@ -14,6 +14,6 @@ func version(e *env, args ...string) error {
 		return err
 	}
 
-	e.stdout.Logf("tubectl version: %s (go runtime %s)\n", Version, runtime.Version())
+	e.stdout.Logf("isomctl version: %s (go runtime %s)\n", Version, runtime.Version())
 	return nil
 }

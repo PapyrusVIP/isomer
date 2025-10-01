@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/cloudflare/tubular/internal"
+	"github.com/PapyrusVIP/isomer/internal"
 )
 
 func unregister(e *env, args ...string) error {
@@ -10,8 +10,8 @@ func unregister(e *env, args ...string) error {
 		Removes the socket mapping for the given label, domain and protocol.
 
 		Examples:
-		  $ tubectl unregister foo ipv4 udp
-		  $ tubectl unregister bar ipv6 tcp
+		  $ isomctl unregister foo ipv4 udp
+		  $ isomctl unregister bar ipv6 tcp
 		`
 
 	if err := set.Parse(args); err != nil {

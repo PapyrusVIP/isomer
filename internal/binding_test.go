@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"github.com/google/go-cmp/cmp"
 	"inet.af/netaddr"
 )

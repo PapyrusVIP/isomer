@@ -1,5 +1,5 @@
-name: tubular
-maintainer: "unimog"
+name: isomer
+maintainer: Papyrus VIP
 arch: "${TARGET_ARCH}"
 platform: linux
 version: "${VERSION}"

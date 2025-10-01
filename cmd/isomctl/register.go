@@ -9,9 +9,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/pidfd"
-	"github.com/cloudflare/tubular/internal/sysconn"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/pidfd"
+	"github.com/PapyrusVIP/isomer/internal/sysconn"
 
 	"golang.org/x/sys/unix"
 	"inet.af/netaddr"
@@ -32,7 +32,7 @@ func register(e *env, args ...string) error {
 
 		Examples:
 		  # Register all sockets passed from systemd under label foo
-		  $ tubectl register foo`
+		  $ isomctl register foo`
 
 	if err := set.Parse(args); err != nil {
 		return err
@@ -71,10 +71,10 @@ func registerPID(e *env, args ...string) error {
 
 		Examples:
 			# Register all supported sockets from the process with pid 12345
-			$ tubectl register-pid 12345 foo tcp 127.0.0.1 80
+			$ isomctl register-pid 12345 foo tcp 127.0.0.1 80
 
 			# Read the pid from a file
-			$ tubectl register-pid /path/to.pid foo tcp 127.0.0.1 80`
+			$ isomctl register-pid /path/to.pid foo tcp 127.0.0.1 80`
 
 	if err := set.Parse(args); err != nil {
 		return err

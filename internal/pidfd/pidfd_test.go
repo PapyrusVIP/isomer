@@ -3,7 +3,7 @@ package pidfd
 import (
 	"testing"
 
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 )
 
 func TestFiles(t *testing.T) {

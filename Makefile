@@ -1,7 +1,6 @@
-NAME	:= tubular
+NAME	:= isomer
 VERSION := $(shell git describe --always --dirty="-dev")
 ARCH    ?= amd64
-GO      ?= go
 
 export GOFLAGS += -mod=vendor -ldflags=-X=main.Version=$(VERSION)
 export CLANG   ?= clang-13
@@ -17,10 +16,10 @@ deps := $(addsuffix .d,$(generated))
 .PHONY: all
 all: $(generated) $(deps)
 	@mkdir -p "bin/$(ARCH)"
-	GOARCH="$(ARCH)" $(GO) build -v -o "bin/$(ARCH)" ./cmd/...
+	GOARCH="$(ARCH)" go build -v -o "bin/$(ARCH)" ./cmd/...
 
 internal/%_bpfel.go internal/%_bpfeb.go internal/%.go.d:
-	$(GO) generate ./internal
+	go generate ./internal
 
 .PHONY: package
 package: $(NAME)_$(VERSION)_$(ARCH).deb
@@ -29,17 +28,17 @@ $(NAME)_$(VERSION)_%.deb: clean all
 	TARGET_ARCH=$* VERSION="$(VERSION)" nfpm package -p deb -f nfpm.yaml
 
 .PHONY: test
-test: RUNNER=$(GO) test -exec sudo
+test: RUNNER=go test -exec sudo
 test:
 	$(RUNNER) -coverpkg=./... -coverprofile=coverage.out -count 1 $(TESTFLAGS) ./...
 
 .PHONY: cover
 cover:
-	$(GO) tool cover -html coverage.out -o coverage.html
+	go tool cover -html coverage.out -o coverage.html
 
 .PHONY: build-tests
 build-tests:
-	$(GO) list ./... | while read pkg; do $(GO) test -c $${pkg} || exit; done
+	go list ./... | while read pkg; do go test -c $${pkg} || exit; done
 
 .PHONY: lint
 lint:

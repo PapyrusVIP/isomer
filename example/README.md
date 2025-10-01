@@ -1,14 +1,14 @@
-tubular echo server
-===
+# Isomer echo server
 
-This TCP and UDP echo server shows how to integrate a service with tubular. The
-trickiest part is to figure out when it's safe to invoke `tubectl register-pid`.
+
+This TCP and UDP echo server shows how to integrate a service with isomer. The
+trickiest part is to figure out when it's safe to invoke `isomctl register-pid`.
 `register-pid` will fail if we call it before the echo server has bound its sockets.
 
 We therefore use a transient systemd service with `Type=notify` to determine when
-to call `tubectl register-pid`. See [sd_notify][1] for details on the mechanism.
+to call `isomctl register-pid`. See [sd_notify][1] for details on the mechanism.
 
-TCP servers don't require modification, while dispatching UDP traffic using tubular
+TCP servers don't require modification, while dispatching UDP traffic using isomer
 will require modifying your application.
 
 Support for UDP via IPv4 boils down to:
@@ -34,28 +34,28 @@ Setup
 
 
 ```sh
-# load tubular & create bindings
-go run -exec sudo ../cmd/tubectl load
-go run -exec sudo ../cmd/tubectl bind example tcp 127.0.0.128/25 0
-go run -exec sudo ../cmd/tubectl bind example udp 127.0.0.128/25 1234
+# load isomer & create bindings
+go run -exec sudo ../cmd/isomctl load
+go run -exec sudo ../cmd/isomctl bind example tcp 127.0.0.128/25 0
+go run -exec sudo ../cmd/isomctl bind example udp 127.0.0.128/25 1234
 sudo ip -6 route add local 2001:db8::/64 dev lo
-go run -exec sudo ../cmd/tubectl bind example tcp 2001:db8::/64 0
-go run -exec sudo ../cmd/tubectl bind example udp 2001:db8::/64 1234
+go run -exec sudo ../cmd/isomctl bind example tcp 2001:db8::/64 0
+go run -exec sudo ../cmd/isomctl bind example udp 2001:db8::/64 1234
 
 # run server and register sockets
-sudo systemd-run -G -d -E HOME="$(mktemp -d)" -u tubular-echo-server \
+sudo systemd-run -G -d -E HOME="$(mktemp -d)" -u isomer-echo-server \
 	-p Type=notify -p NotifyAccess=all \
-	-p ExecStartPost="go run ../cmd/tubectl register-pid \$MAINPID example tcp 127.0.0.1 1234" \
-	-p ExecStartPost="go run ../cmd/tubectl register-pid \$MAINPID example udp 127.0.0.1 1234" \
-	-p ExecStartPost="go run ../cmd/tubectl register-pid \$MAINPID example tcp ::1 1234" \
-	-p ExecStartPost="go run ../cmd/tubectl register-pid \$MAINPID example udp ::1 1234" \
+	-p ExecStartPost="go run ../cmd/isomctl register-pid \$MAINPID example tcp 127.0.0.1 1234" \
+	-p ExecStartPost="go run ../cmd/isomctl register-pid \$MAINPID example udp 127.0.0.1 1234" \
+	-p ExecStartPost="go run ../cmd/isomctl register-pid \$MAINPID example tcp ::1 1234" \
+	-p ExecStartPost="go run ../cmd/isomctl register-pid \$MAINPID example udp ::1 1234" \
 	go run main.go
 ```
 
 You should now have the following bindings and sockets present:
 
 ```
-$ go run -exec sudo ../cmd/tubectl list
+$ go run -exec sudo ../cmd/isomctl list
 opened dispatcher at /sys/fs/bpf/4026532008_dispatcher
 Bindings:
  protocol         prefix port   label
@@ -87,9 +87,9 @@ echo $USER | nc -u 2001:db8::2342 1234
 Once you are done experimenting you can clean up:
 
 ```sh
-sudo systemctl stop tubular-echo-server
+sudo systemctl stop isomer-echo-server
 sudo ip -6 route del local 2001:db8::/64 dev lo
-go run -exec sudo ../cmd/tubectl unload
+go run -exec sudo ../cmd/isomctl unload
 ```
 
 [1]: https://www.freedesktop.org/software/systemd/man/sd_notify.html

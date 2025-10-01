@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"text/tabwriter"
 
-	"github.com/cloudflare/tubular/internal"
+	"github.com/PapyrusVIP/isomer/internal"
 	"inet.af/netaddr"
 )
 
@@ -17,9 +17,9 @@ func bindings(e *env, args ...string) error {
 		List bindings which match certain criteria.
 
 		Examples:
-		  $ tubectl bindings
-		  $ tubectl bindings any 127.0.0.0/8
-		  $ tubectl bindings udp ::1 443`
+		  $ isomctl bindings
+		  $ isomctl bindings any 127.0.0.0/8
+		  $ isomctl bindings udp ::1 443`
 	if err := set.Parse(args); err != nil {
 		return err
 	}
@@ -99,8 +99,8 @@ func bind(e *env, args ...string) error {
 		Bind a given prefix, port and protocol to a label.
 
 		Examples:
-		  $ tubectl bind foo udp 127.0.0.1 0
-		  $ tubectl bind bar tcp 127.0.0.0/24 80`
+		  $ isomctl bind foo udp 127.0.0.1 0
+		  $ isomctl bind bar tcp 127.0.0.0/24 80`
 
 	if err := set.Parse(args); err != nil {
 		return err

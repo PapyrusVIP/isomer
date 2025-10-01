@@ -94,7 +94,7 @@ func (fs *flagSet) PrintCommand() {
 		args += fmt.Sprintf(" [<%s>]", strings.Join(fs.optionalArgs, ">] [<"))
 	}
 
-	fmt.Fprintf(o, "Usage: tubectl %s%s\n\n", fs.Name(), args)
+	fmt.Fprintf(o, "Usage: isomctl %s%s\n\n", fs.Name(), args)
 }
 
 func (fs *flagSet) Printf(format string, args ...interface{}) {

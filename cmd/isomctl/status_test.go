@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 )
 
 func TestStatus(t *testing.T) {
@@ -23,7 +23,7 @@ func TestStatus(t *testing.T) {
 	mustRegisterSocket(t, dp, "foo", sock)
 	dp.Close()
 
-	output, err := testTubectl(t, netns, "status")
+	output, err := testIsomctl(t, netns, "status")
 	if err != nil {
 		t.Fatal("Can't execute status:", err)
 	}
@@ -38,7 +38,7 @@ func TestStatus(t *testing.T) {
 		t.Error("Output of status doesn't contain", cookie)
 	}
 
-	output2, err := testTubectl(t, netns, "status")
+	output2, err := testIsomctl(t, netns, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestStatusFilteredByLabel(t *testing.T) {
 	mustRegisterSocket(t, dp, "foo", sock)
 	dp.Close()
 
-	output, err := testTubectl(t, netns, "status", "foo")
+	output, err := testIsomctl(t, netns, "status", "foo")
 	if err != nil {
 		t.Fatal("Can't execute list foo:", err)
 	}
@@ -69,7 +69,7 @@ func TestStatusFilteredByLabel(t *testing.T) {
 		t.Error("Output of list doesn't contain label foo")
 	}
 
-	output, err = testTubectl(t, netns, "status", "bar")
+	output, err = testIsomctl(t, netns, "status", "bar")
 	if err != nil {
 		t.Fatal("Can't execute list bar:", err)
 	}
@@ -82,20 +82,20 @@ func TestStatusFilteredByLabel(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
-	tubectl := tubectlTestCall{
+	isomctl := isomctlTestCall{
 		NetNS:     netns,
 		Cmd:       "metrics",
 		Args:      []string{"127.0.0.1", "0"},
 		Listeners: make(chan net.Listener, 1),
 	}
 
-	tubectl.Start(t)
+	isomctl.Start(t)
 
 	var ln net.Listener
 	select {
-	case ln = <-tubectl.Listeners:
+	case ln = <-isomctl.Listeners:
 	case <-time.After(time.Second):
-		t.Fatal("tubectl isn't listening after one second")
+		t.Fatal("isomctl isn't listening after one second")
 	}
 
 	client := http.Client{Timeout: 5 * time.Second}
@@ -117,8 +117,8 @@ func TestMetrics(t *testing.T) {
 				t.Error("Output doesn't contain prometheus export format")
 			}
 
-			if !bytes.Contains(body, []byte("# TYPE tubular_")) {
-				t.Error("Output doesn't contain tubular prefix")
+			if !bytes.Contains(body, []byte("# TYPE isomer_")) {
+				t.Error("Output doesn't contain isomer prefix")
 			}
 
 			if !bytes.Contains(body, []byte("# TYPE build_info")) {
@@ -131,12 +131,12 @@ func TestMetrics(t *testing.T) {
 func TestMetricsInvalidArgs(t *testing.T) {
 	netns := testutil.CurrentNetNS(t)
 
-	_, err := testTubectl(t, netns, "metrics")
+	_, err := testIsomctl(t, netns, "metrics")
 	if err == nil {
 		t.Error("metrics command accepts no arguments")
 	}
 
-	_, err = testTubectl(t, netns, "metrics", "127.0.0.1")
+	_, err = testIsomctl(t, netns, "metrics", "127.0.0.1")
 	if err == nil {
 		t.Error("metrics command accepts missing port")
 	}

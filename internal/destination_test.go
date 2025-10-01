@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/cilium/ebpf"
 )

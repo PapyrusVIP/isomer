@@ -16,7 +16,7 @@ import (
 	"golang.org/x/sys/unix"
 	"kernel.org/pub/linux/libs/security/libcap/cap"
 
-	"github.com/cloudflare/tubular/internal/lock"
+	"github.com/PapyrusVIP/isomer/internal/lock"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc "$CLANG" -strip "$STRIP" -makebase "$MAKEDIR" dispatcher ../ebpf/inet-kern.c -- -mcpu=v2 -nostdinc -Wall -Werror -I../ebpf/include
@@ -59,7 +59,7 @@ func CreateDispatcher(netnsPath, bpfFsPath string) (_ *Dispatcher, err error) {
 	}
 	defer netns.Close()
 
-	tempDir, err := ioutil.TempDir(filepath.Dir(pinPath), "tubular-*")
+	tempDir, err := ioutil.TempDir(filepath.Dir(pinPath), "isomer-*")
 	if err != nil {
 		return nil, fmt.Errorf("can't create temp directory: %s", err)
 	}

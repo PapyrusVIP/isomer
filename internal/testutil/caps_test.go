@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudflare/tubular/internal/rlimit"
+	"github.com/PapyrusVIP/isomer/internal/rlimit"
 	"kernel.org/pub/linux/libs/security/libcap/cap"
 )
 

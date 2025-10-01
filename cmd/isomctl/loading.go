@@ -3,12 +3,12 @@ package main
 import (
 	"errors"
 
-	"github.com/cloudflare/tubular/internal"
+	"github.com/PapyrusVIP/isomer/internal"
 )
 
 func load(e *env, args ...string) error {
 	set := e.newFlagSet("load")
-	set.Description = "Load the tubular dispatcher."
+	set.Description = "Load the isomer dispatcher."
 	if err := set.Parse(args); err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func load(e *env, args ...string) error {
 
 func unload(e *env, args ...string) error {
 	set := e.newFlagSet("unload")
-	set.Description = "Unload the tubular dispatcher, removing any present state."
+	set.Description = "Unload the isomer dispatcher, removing any present state."
 	if err := set.Parse(args); err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func unload(e *env, args ...string) error {
 
 func upgrade(e *env, args ...string) error {
 	set := e.newFlagSet("upgrade")
-	set.Description = "Upgrade the tubular dispatcher, while preserving present state."
+	set.Description = "Upgrade the isomer dispatcher, while preserving present state."
 	if err := set.Parse(args); err != nil {
 		return err
 	}

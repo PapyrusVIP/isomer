@@ -87,7 +87,7 @@ func TestTryLock(t *testing.T) {
 func mustTempDir(tb testing.TB) func() *os.File {
 	tb.Helper()
 
-	dir, err := ioutil.TempDir("", "tubular")
+	dir, err := ioutil.TempDir("", "isomer")
 	if err != nil {
 		tb.Fatal(err)
 	}

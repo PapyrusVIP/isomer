@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -54,7 +54,7 @@ func TestBindings(t *testing.T) {
 		{[]string{"udp", "2::1", "443"}, set("wild")},
 	} {
 		t.Run(strings.Join(test.args, " "), func(t *testing.T) {
-			output, err := testTubectl(t, netns, "bindings", test.args...)
+			output, err := testIsomctl(t, netns, "bindings", test.args...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,7 +78,7 @@ func TestBindings(t *testing.T) {
 func TestBindUnbind(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
-	if _, err := testTubectl(t, netns, "bind"); err == nil {
+	if _, err := testIsomctl(t, netns, "bind"); err == nil {
 		t.Error("bind without arguments should return an error")
 	}
 
@@ -89,14 +89,14 @@ func TestBindUnbind(t *testing.T) {
 	}
 
 	for _, args := range valid {
-		_, err := testTubectl(t, netns, "bind", args...)
+		_, err := testIsomctl(t, netns, "bind", args...)
 		if err != nil {
 			t.Errorf("Can't bind with args %q: %s", args, err)
 		}
 	}
 
 	for _, args := range valid {
-		_, err := testTubectl(t, netns, "unbind", args...)
+		_, err := testIsomctl(t, netns, "unbind", args...)
 		if err != nil {
 			t.Errorf("Can't unbind with args %q: %s", args, err)
 		}
@@ -106,12 +106,12 @@ func TestBindUnbind(t *testing.T) {
 func TestBindInvariants(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
-	_, err := testTubectl(t, netns, "unbind", "foo", "udp", "::1", "443")
+	_, err := testIsomctl(t, netns, "unbind", "foo", "udp", "::1", "443")
 	if err == nil {
 		t.Error("Unbind doesn't return an error for non-existing binding")
 	}
 
-	_, err = testTubectl(t, netns, "bind", "foo", "udp", "::1", "443")
+	_, err = testIsomctl(t, netns, "bind", "foo", "udp", "::1", "443")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,27 +145,27 @@ func TestBindInvalidInput(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
 	// stp is not a valid transport protocol
-	_, err := testTubectl(t, netns, "bind", "foo", "stp", "::1", "443")
+	_, err := testIsomctl(t, netns, "bind", "foo", "stp", "::1", "443")
 	if err == nil {
 		t.Error("Accepted invalid proto")
 	}
 
-	_, err = testTubectl(t, netns, "unbind", "foo", "stp", "::1", "443")
+	_, err = testIsomctl(t, netns, "unbind", "foo", "stp", "::1", "443")
 	if err == nil {
 		t.Error("Accepted invalid proto")
 	}
 
-	_, err = testTubectl(t, netns, "bind", "foo", "udp", "::1", "111443")
+	_, err = testIsomctl(t, netns, "bind", "foo", "udp", "::1", "111443")
 	if err == nil {
 		t.Error("Accepted invalid port")
 	}
 
-	_, err = testTubectl(t, netns, "unbind", "foo", "udp", "::1", "111443")
+	_, err = testIsomctl(t, netns, "unbind", "foo", "udp", "::1", "111443")
 	if err == nil {
 		t.Error("Accepted invalid port")
 	}
 
-	_, err = testTubectl(t, netns, "bind", "foo", "udp", "::ffff:192.0.2.128/96", "443")
+	_, err = testIsomctl(t, netns, "bind", "foo", "udp", "::ffff:192.0.2.128/96", "443")
 	if err == nil {
 		t.Error("Accepted v4-mapped prefix")
 	}
@@ -174,12 +174,12 @@ func TestBindInvalidInput(t *testing.T) {
 func TestLoadBindings(t *testing.T) {
 	netns := mustReadyNetNS(t)
 
-	_, err := testTubectl(t, netns, "load-bindings", "testdata/invalid-bindings.json")
+	_, err := testIsomctl(t, netns, "load-bindings", "testdata/invalid-bindings.json")
 	if err == nil {
 		t.Error("Invalid bindings json must return an error")
 	}
 
-	output, err := testTubectl(t, netns, "load-bindings", "testdata/bindings.json")
+	output, err := testIsomctl(t, netns, "load-bindings", "testdata/bindings.json")
 	if err != nil {
 		t.Fatal("Can't load valid bindings:", err)
 	}

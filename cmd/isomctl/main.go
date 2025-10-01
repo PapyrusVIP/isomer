@@ -1,4 +1,4 @@
-// Program tubectl controls the behaviour of the socket dispatcher.
+// Program isomctl controls the behaviour of the socket dispatcher.
 package main
 
 import (
@@ -10,9 +10,9 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/cloudflare/tubular/internal"
-	"github.com/cloudflare/tubular/internal/log"
-	"github.com/cloudflare/tubular/internal/rlimit"
+	"github.com/PapyrusVIP/isomer/internal"
+	"github.com/PapyrusVIP/isomer/internal/log"
+	"github.com/PapyrusVIP/isomer/internal/rlimit"
 
 	"golang.org/x/sys/unix"
 	"kernel.org/pub/linux/libs/security/libcap/cap"
@@ -41,7 +41,7 @@ var (
 		listen:  net.Listen,
 	}
 
-	// Errors returned by tubectl
+	// Errors returned by isomctl
 	errBadArg = syscall.EINVAL
 	errBadFD  = syscall.EBADF
 )
@@ -122,14 +122,14 @@ var cmds = []struct {
 	{"list", list, true},
 }
 
-func tubectl(e env, args []string) (err error) {
+func isomctl(e env, args []string) (err error) {
 	defer func() {
 		if err != nil {
 			e.stderr.Log("Error:", err)
 		}
 	}()
 
-	set := flag.NewFlagSet("tubectl", flag.ContinueOnError)
+	set := flag.NewFlagSet("isomctl", flag.ContinueOnError)
 	set.SetOutput(e.stderr)
 	set.StringVar(&e.netns, "netns", "/proc/self/ns/net", "`path` to the network namespace")
 	set.StringVar(&e.bpfFs, "bpffs", "/sys/fs/bpf", "`path` to a BPF filesystem for state")
@@ -194,7 +194,7 @@ func tubectl(e env, args []string) (err error) {
 }
 
 func main() {
-	if err := tubectl(defaultEnv, os.Args[1:]); err != nil {
+	if err := isomctl(defaultEnv, os.Args[1:]); err != nil {
 		os.Exit(1)
 	}
 }

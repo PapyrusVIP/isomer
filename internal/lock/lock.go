@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/cloudflare/tubular/internal/sysconn"
+	"github.com/PapyrusVIP/isomer/internal/sysconn"
 
 	"golang.org/x/sys/unix"
 )

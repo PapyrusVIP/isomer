@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudflare/tubular/internal/lock"
-	"github.com/cloudflare/tubular/internal/log"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/lock"
+	"github.com/PapyrusVIP/isomer/internal/log"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"golang.org/x/sys/unix"
 	"inet.af/netaddr"
 

@@ -11,8 +11,8 @@ func TestUnregister(t *testing.T) {
 	// Make the listening socket that matches what we remove, and one that doesn't
 	fds := testFds{makeListeningSocket(t, netns, "tcp4"), makeListeningSocket(t, netns, "tcp6")}
 
-	// Register the sockets with tubectl
-	tubectl := tubectlTestCall{
+	// Register the sockets with isomctl
+	isomctl := isomctlTestCall{
 		NetNS:    netns,
 		ExecNS:   netns,
 		Cmd:      "register",
@@ -20,7 +20,7 @@ func TestUnregister(t *testing.T) {
 		Env:      map[string]string{"LISTEN_FDS": "2"},
 		ExtraFds: fds,
 	}
-	tubectl.MustRun(t)
+	isomctl.MustRun(t)
 
 	// Open the dispatcher and verify the numer of destinations
 	{
@@ -41,13 +41,13 @@ func TestUnregister(t *testing.T) {
 		dp.Close()
 	}
 
-	tubectl = tubectlTestCall{
+	isomctl = isomctlTestCall{
 		NetNS:  netns,
 		ExecNS: netns,
 		Cmd:    "unregister",
 		Args:   []string{"svc-label", "ipv4", "tcp"},
 	}
-	tubectl.MustRun(t)
+	isomctl.MustRun(t)
 
 	dp := mustOpenDispatcher(t, netns)
 
@@ -74,14 +74,14 @@ func TestUnregisterNoSocket(t *testing.T) {
 	// Generate a new netns/dispatcher for the test
 	netns := mustReadyNetNS(t)
 
-	tubectl := tubectlTestCall{
+	isomctl := isomctlTestCall{
 		NetNS:  netns,
 		ExecNS: netns,
 		Cmd:    "unregister",
 		Args:   []string{"svc-label", "ipv4", "tcp"},
 	}
 
-	_, err := tubectl.Run(t)
+	_, err := isomctl.Run(t)
 	if err == nil {
 		t.Fatal("unregister without sockets must return error")
 	}
@@ -95,14 +95,14 @@ func TestUnregisterArgs(t *testing.T) {
 		t.Run(tc, func(t *testing.T) {
 			netns := mustReadyNetNS(t)
 
-			tubectl := tubectlTestCall{
+			isomctl := isomctlTestCall{
 				NetNS:  netns,
 				ExecNS: netns,
 				Cmd:    "unregister",
 				Args:   args,
 			}
 
-			_, err := tubectl.Run(t)
+			_, err := isomctl.Run(t)
 			if err == nil {
 				t.Fatal("unregister must reject incorrect number of args")
 			}

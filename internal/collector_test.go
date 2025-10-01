@@ -4,8 +4,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/cloudflare/tubular/internal/log"
-	"github.com/cloudflare/tubular/internal/testutil"
+	"github.com/PapyrusVIP/isomer/internal/log"
+	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/client_golang/prometheus"
