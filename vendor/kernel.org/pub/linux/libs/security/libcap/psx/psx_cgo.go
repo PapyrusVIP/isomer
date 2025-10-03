@@ -1,14 +1,14 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package psx // import "kernel.org/pub/linux/libs/security/libcap/psx"
 
 import (
 	"runtime"
+	"sync"
 	"syscall"
 )
 
-// #cgo LDFLAGS: -lpthread -Wl,-wrap,pthread_create
-//
 // #include <errno.h>
 // #include "psx_syscall.h"
 //
@@ -32,19 +32,36 @@ func setErrno(v int) int {
 	return int(C.__errno_too(C.long(v)))
 }
 
+var makeFatal sync.Once
+
+// forceFatal configures the psx_syscall mechanism to PSX_ERROR.
+func forceFatal() {
+	makeFatal.Do(func() {
+		C.psx_set_sensitivity(C.PSX_ERROR)
+	})
+}
+
 //go:uintptrescapes
 
 // Syscall3 performs a 3 argument syscall. Syscall3 differs from
 // syscall.[Raw]Syscall() insofar as it is simultaneously executed on
-// every thread of the combined Go and CGo runtimes. It works
-// differently depending on whether CGO_ENABLED is 1 or 0 at compile
-// time.
+// every thread of the combined Go and CGo runtimes. If any of the
+// return values of these sumultaneous system calls differs, the
+// runtime will cause the program to exit.
 //
-// If CGO_ENABLED=1 it uses the libpsx function C.psx_syscall3().
+// Syscall3 works differently depending on whether CGO_ENABLED is 1 or
+// 0 at compile time.
+//
+// If CGO_ENABLED=1 it uses the libpsx function C.psx_syscall3(), with
+// libpsx:psx_set_sensitivity(PSX_ERROR) - which means the program
+// will be signo=33 killed when inconsistent return values are
+// returned for any pthread.
 //
 // If CGO_ENABLED=0 it redirects to the go1.16+
-// syscall.AllThreadsSyscall() function.
+// syscall.AllThreadsSyscall() function. This function panics if
+// inconsistent return values are returned for any pthread.
 func Syscall3(syscallnr, arg1, arg2, arg3 uintptr) (uintptr, uintptr, syscall.Errno) {
+	forceFatal()
 	// We lock to the OSThread here because we may need errno to
 	// be the one for this thread.
 	runtime.LockOSThread()
@@ -65,6 +82,7 @@ func Syscall3(syscallnr, arg1, arg2, arg3 uintptr) (uintptr, uintptr, syscall.Er
 // arguments, its behavior is identical to that of Syscall3() - see
 // above for the full documentation.
 func Syscall6(syscallnr, arg1, arg2, arg3, arg4, arg5, arg6 uintptr) (uintptr, uintptr, syscall.Errno) {
+	forceFatal()
 	// We lock to the OSThread here because we may need errno to
 	// be the one for this thread.
 	runtime.LockOSThread()

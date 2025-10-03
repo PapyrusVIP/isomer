@@ -1,12 +1,32 @@
 /*
- * Copyright (c) 2019 Andrew G. Morgan <morgan@kernel.org>
+ * Copyright (c) 2019,24 Andrew G. Morgan <morgan@kernel.org>
  *
  * This header, and the -lpsx library, provide a number of things to
  * support POSIX semantics for syscalls associated with the pthread
- * library. Linking this code is tricky and is done as follows:
+ * library. For any code that references the psx_syscall{3,6}
+ * functions, linking this code is as follows:
  *
- *     ld ... -lpsx -lpthread --wrap=pthread_create
- * or, gcc ... -lpsx -lpthread -Wl,-wrap,pthread_create
+ *     ld ... -lpsx -lpthread
+ * or,
+ *     gcc ... -lpsx -lpthread
+ *
+ * NOTE: linking with -lcap to make it silently aware of the psx
+ *    mechanism is tricky. You have to envelope the -lpsx part with
+ *    the following linker flags:
+ *
+ *     ld ... --no-as-needed --whole-archive -lpsx --no-whole-archive --as-needed -lpthread
+ * or,
+ *     gcc ... -Wl,--no-as-needed -Wl,--whole-archive -lpsx -Wl,--no-whole-archive -Wl,--as-needed -lpthread
+ *
+ *    These options are provided in the
+ *    https://en.wikipedia.org/wiki/Pkg-config libpsx.pc file
+ *    distributed with the library.
+ *
+ *    FYI Earlier versions of libpsx relied on gcc
+ *    ... -Wl,--wrap=pthread_create linkage in all cases, but since
+ *    libpsx-2.72 the library can work with non pthread threads (LWP)
+ *    under Linux and such wrapping is no longer needed. That being
+ *    said, for compatibility reasons such linking is still supported.
  *
  * glibc provides a subset of this functionality natively through the
  * nptl:setxid mechanism and could implement psx_syscall() directly
@@ -23,7 +43,11 @@
 extern "C" {
 #endif
 
-#include <pthread.h>
+/*
+ * Programmatic way to recognize feature set.
+ */
+#define LIBPSX_MAJOR 2
+#define LIBPSX_MINOR 76
 
 /*
  * psx_syscall performs the specified syscall on all psx registered
@@ -66,6 +90,27 @@ void psx_load_syscalls(long int (**syscall_fn)(long int,
 		       long int (**syscall6_fn)(long int,
 						long int, long int, long int,
 						long int, long int, long int));
+
+/*
+ * psx_sensitivity_t holds the level of paranoia for non-POSIX syscall
+ * behavior. The default is PSX_IGNORE: which is best effort - no
+ * enforcement; PSX_WARNING will dump to stderr a warning when a
+ * syscall's results differ; PSX_ERROR will dump info as per
+ * PSX_WARNING and generate a SIGSYS. The current mode can be set with
+ * psx_set_sensitivity().
+ */
+typedef enum {
+    PSX_IGNORE = 0,
+    PSX_WARNING = 1,
+    PSX_ERROR = 2,
+} psx_sensitivity_t;
+
+/*
+ * psx_set_sensitivity sets the current sensitivity of the PSX
+ * mechanism.  The function returns 0 on success and -1 if the
+ * requested level is invalid.
+ */
+int psx_set_sensitivity(psx_sensitivity_t level);
 
 #ifdef __cplusplus
 }

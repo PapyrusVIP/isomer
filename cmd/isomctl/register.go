@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/PapyrusVIP/isomer/internal/sysconn"
 
 	"golang.org/x/sys/unix"
-	"inet.af/netaddr"
 )
 
 const (
@@ -98,7 +98,7 @@ func registerPID(e *env, args ...string) error {
 	label := set.Arg(1)
 	protocol := set.Arg(2)
 
-	ip, err := netaddr.ParseIP(set.Arg(3))
+	ip, err := netip.ParseAddr(set.Arg(3))
 	if err != nil {
 		return fmt.Errorf("invalid IP %q: %s", set.Arg(3), err)
 	}

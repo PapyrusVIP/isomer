@@ -1,18 +1,24 @@
+//go:build !windows
+
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
-	"go/token"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/cmd/bpf2go/gen"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -32,72 +38,125 @@ compiler as two arguments "foo" and "bar baz".
 The program expects GOPACKAGE to be set in the environment, and should be invoked
 via go generate. The generated files are written to the current directory.
 
+Some options take defaults from the environment. Variable name is mentioned
+next to the respective option.
+
 Options:
 
 `
 
-// Targets understood by bpf2go.
-//
-// Targets without a Linux string can't be used directly and are only included
-// for the generic bpf, bpfel, bpfeb targets.
-var targetByGoArch = map[string]target{
-	"386":         {"bpfel", "x86"},
-	"amd64":       {"bpfel", "x86"},
-	"amd64p32":    {"bpfel", ""},
-	"arm":         {"bpfel", "arm"},
-	"arm64":       {"bpfel", "arm64"},
-	"mipsle":      {"bpfel", ""},
-	"mips64le":    {"bpfel", ""},
-	"mips64p32le": {"bpfel", ""},
-	"ppc64le":     {"bpfel", "powerpc"},
-	"riscv64":     {"bpfel", ""},
-	"armbe":       {"bpfeb", "arm"},
-	"arm64be":     {"bpfeb", "arm64"},
-	"mips":        {"bpfeb", ""},
-	"mips64":      {"bpfeb", ""},
-	"mips64p32":   {"bpfeb", ""},
-	"ppc64":       {"bpfeb", "powerpc"},
-	"s390":        {"bpfeb", "s390"},
-	"s390x":       {"bpfeb", "s390"},
-	"sparc":       {"bpfeb", "sparc"},
-	"sparc64":     {"bpfeb", "sparc"},
+func run(stdout io.Writer, args []string) (err error) {
+	b2g, err := newB2G(stdout, args)
+	switch {
+	case err == nil:
+		return b2g.convertAll()
+	case errors.Is(err, flag.ErrHelp):
+		return nil
+	default:
+		return err
+	}
 }
 
-func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	b2g := bpf2go{
-		stdout:    stdout,
-		pkg:       pkg,
-		outputDir: outputDir,
+type bpf2go struct {
+	stdout  io.Writer
+	verbose bool
+	// Absolute path to a .c file.
+	sourceFile string
+	// Absolute path to a directory where .go are written
+	outputDir string
+	// Alternative output stem. If empty, identStem is used.
+	outputStem string
+	// Suffix in generated file names such as _test.
+	outputSuffix string
+	// Valid go package name.
+	pkg string
+	// Valid go identifier.
+	identStem string
+	// Targets to build for.
+	targetArches map[gen.Target]gen.GoArches
+	// C compiler.
+	cc string
+	// Command used to strip DWARF.
+	strip            string
+	disableStripping bool
+	// C flags passed to the compiler.
+	cFlags          []string
+	skipGlobalTypes bool
+	// C types to include in the generated output.
+	cTypes cTypes
+	// Build tags to be included in the output.
+	tags buildTags
+	// Base directory of the Makefile. Enables outputting make-style dependencies
+	// in .d files.
+	makeBase string
+}
+
+func (b2g *bpf2go) Debugln(a ...any) {
+	if b2g.verbose {
+		fmt.Fprintln(b2g.stdout, a...)
+	}
+}
+
+func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
+	b2g := &bpf2go{
+		stdout: stdout,
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
-	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
-	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
+	fs.BoolVar(&b2g.verbose, "verbose", getBool("V", false), "Enable verbose logging ($V)")
+	fs.StringVar(&b2g.cc, "cc", getEnv("BPF2GO_CC", "clang"),
+		"`binary` used to compile C to BPF ($BPF2GO_CC)")
+	fs.StringVar(&b2g.strip, "strip", getEnv("BPF2GO_STRIP", ""),
+		"`binary` used to strip DWARF from compiled BPF ($BPF2GO_STRIP)")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
-	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
-	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
-	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for")
-	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
+	flagCFlags := fs.String("cflags", getEnv("BPF2GO_CFLAGS", ""),
+		"flags passed to the compiler, may contain quoted arguments ($BPF2GO_CFLAGS)")
+	fs.Var(&b2g.tags, "tags", "Comma-separated list of Go build tags to include in generated files")
+	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
+	fs.StringVar(&b2g.makeBase, "makebase", getEnv("BPF2GO_MAKEBASE", ""),
+		"write make compatible depinfo files relative to `directory` ($BPF2GO_MAKEBASE)")
+	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
+	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
+	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
+	outputSuffix := ""
+	if strings.HasSuffix(getEnv("GOFILE", ""), "_test.go") {
+		outputSuffix = "_test"
+	}
+	fs.StringVar(&b2g.outputSuffix, "output-suffix", outputSuffix,
+		"suffix in generated file names such as _test (default based on $GOFILE)")
+	outDir := fs.String("output-dir", "", "target directory of generated files (defaults to current directory)")
+	outPkg := fs.String("go-package", "", "package for output go file (default as ENV GOPACKAGE)")
 
-	fs.SetOutput(stdout)
+	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
 		fs.PrintDefaults()
 		fmt.Fprintln(fs.Output())
 		printTargets(fs.Output())
 	}
-	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
-		return nil
-	} else if err != nil {
-		return err
+	if err := fs.Parse(args); err != nil {
+		return nil, err
 	}
 
+	if *outDir == "" {
+		var err error
+		if *outDir, err = os.Getwd(); err != nil {
+			return nil, err
+		}
+	}
+	b2g.outputDir = *outDir
+
+	if *outPkg == "" {
+		*outPkg = os.Getenv(gopackageEnv)
+	}
+	b2g.pkg = *outPkg
+
 	if b2g.pkg == "" {
-		return errors.New("missing package, are you running via go generate?")
+		return nil, errors.New("missing package, you should either set the go-package flag or the GOPACKAGE env")
 	}
 
 	if b2g.cc == "" {
-		return errors.New("no compiler specified")
+		return nil, errors.New("no compiler specified")
 	}
 
 	args, cFlags := splitCFlagsFromArgs(fs.Args())
@@ -105,7 +164,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	if *flagCFlags != "" {
 		splitCFlags, err := splitArguments(*flagCFlags)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Command line arguments take precedence over C flags
@@ -115,76 +174,144 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	for _, cFlag := range cFlags {
 		if strings.HasPrefix(cFlag, "-M") {
-			return fmt.Errorf("use -makebase instead of %q", cFlag)
+			return nil, fmt.Errorf("use -makebase instead of %q", cFlag)
 		}
 	}
 
 	b2g.cFlags = cFlags[:len(cFlags):len(cFlags)]
 
 	if len(args) < 2 {
-		return errors.New("expected at least two arguments")
+		return nil, errors.New("expected at least two arguments")
 	}
 
-	b2g.ident = args[0]
-	if !token.IsIdentifier(b2g.ident) {
-		return fmt.Errorf("%q is not a valid identifier", b2g.ident)
-	}
+	b2g.identStem = args[0]
 
-	input := args[1]
-	if _, err := os.Stat(input); os.IsNotExist(err) {
-		return fmt.Errorf("file %s doesn't exist", input)
-	} else if err != nil {
-		return fmt.Errorf("state %s: %s", input, err)
-	}
-
-	b2g.sourceFile, err = filepath.Abs(input)
+	sourceFile, err := filepath.Abs(args[1])
 	if err != nil {
-		return err
+		return nil, err
 	}
+	b2g.sourceFile = sourceFile
 
 	if b2g.makeBase != "" {
 		b2g.makeBase, err = filepath.Abs(b2g.makeBase)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	if strings.ContainsRune(b2g.tags, '\n') {
-		return fmt.Errorf("-tags mustn't contain new line characters")
+	if b2g.outputStem != "" && strings.ContainsRune(b2g.outputStem, filepath.Separator) {
+		return nil, fmt.Errorf("-output-stem %q must not contain path separation characters", b2g.outputStem)
 	}
 
-	targetArches := strings.Split(*flagTarget, ",")
+	if strings.ContainsRune(b2g.outputSuffix, filepath.Separator) {
+		return nil, fmt.Errorf("-output-suffix %q must not contain path separation characters", b2g.outputSuffix)
+	}
+
+	targetArches := make(map[gen.Target]gen.GoArches)
+	for _, tgt := range strings.Split(*flagTarget, ",") {
+		target, goarches, err := gen.FindTarget(tgt)
+		if err != nil {
+			if errors.Is(err, gen.ErrInvalidTarget) {
+				printTargets(b2g.stdout)
+				fmt.Fprintln(b2g.stdout)
+			}
+			return nil, err
+		}
+
+		targetArches[target] = goarches
+	}
+
 	if len(targetArches) == 0 {
-		return fmt.Errorf("no targets specified")
+		return nil, fmt.Errorf("no targets specified")
+	}
+	b2g.targetArches = targetArches
+
+	// Try to find a suitable llvm-strip, possibly with a version suffix derived
+	// from the clang binary.
+	if b2g.strip == "" {
+		b2g.strip = "llvm-strip"
+		if after, ok := strings.CutPrefix(b2g.cc, "clang"); ok {
+			b2g.strip += after
+		}
 	}
 
-	targets, err := collectTargets(targetArches)
-	if errors.Is(err, errInvalidTarget) {
-		printTargets(stdout)
-		fmt.Fprintln(stdout)
-		return err
+	return b2g, nil
+}
+
+// cTypes collects the C type names a user wants to generate Go types for.
+//
+// Names are guaranteed to be unique, and only a subset of names is accepted so
+// that we may extend the flag syntax in the future.
+type cTypes []string
+
+var _ flag.Value = (*cTypes)(nil)
+
+func (ct *cTypes) String() string {
+	if ct == nil {
+		return "[]"
 	}
+	return fmt.Sprint(*ct)
+}
+
+const validCTypeChars = `[a-z0-9_]`
+
+var reValidCType = regexp.MustCompile(`(?i)^` + validCTypeChars + `+$`)
+
+func (ct *cTypes) Set(value string) error {
+	if !reValidCType.MatchString(value) {
+		return fmt.Errorf("%q contains characters outside of %s", value, validCTypeChars)
+	}
+
+	i := sort.SearchStrings(*ct, value)
+	if i >= len(*ct) {
+		*ct = append(*ct, value)
+		return nil
+	}
+
+	if (*ct)[i] == value {
+		return fmt.Errorf("duplicate type %q", value)
+	}
+
+	*ct = append((*ct)[:i], append([]string{value}, (*ct)[i:]...)...)
+	return nil
+}
+
+func getEnv(key, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	}
+	return defaultVal
+}
+
+func getBool(key string, defaultVal bool) bool {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultVal
+	}
+
+	b, err := strconv.ParseBool(val)
 	if err != nil {
+		return defaultVal
+	}
+
+	return b
+}
+
+func (b2g *bpf2go) convertAll() (err error) {
+	if _, err := os.Stat(b2g.sourceFile); os.IsNotExist(err) {
+		return fmt.Errorf("file %s doesn't exist", b2g.sourceFile)
+	} else if err != nil {
 		return err
 	}
 
 	if !b2g.disableStripping {
-		// Try to find a suitable llvm-strip, possibly with a version suffix derived
-		// from the clang binary.
-		if b2g.strip == "" {
-			b2g.strip = "llvm-strip"
-			if strings.HasPrefix(b2g.cc, "clang") {
-				b2g.strip += strings.TrimPrefix(b2g.cc, "clang")
-			}
-		}
-
 		b2g.strip, err = exec.LookPath(b2g.strip)
 		if err != nil {
 			return err
 		}
 	}
 
-	for target, arches := range targets {
+	for target, arches := range b2g.targetArches {
 		if err := b2g.convert(target, arches); err != nil {
 			return err
 		}
@@ -193,31 +320,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	return nil
 }
 
-type bpf2go struct {
-	stdout io.Writer
-	// Absolute path to a .c file.
-	sourceFile string
-	// Absolute path to a directory where .go are written
-	outputDir string
-	// Valid go package name.
-	pkg string
-	// Valid go identifier.
-	ident string
-	// C compiler.
-	cc string
-	// Command used to strip DWARF.
-	strip            string
-	disableStripping bool
-	// C flags passed to the compiler.
-	cFlags []string
-	// Go tags included in the .go
-	tags string
-	// Base directory of the Makefile. Enables outputting make-style dependencies
-	// in .d files.
-	makeBase string
-}
-
-func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
+func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	removeOnError := func(f *os.File) {
 		if err != nil {
 			os.Remove(f.Name())
@@ -225,113 +328,190 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		f.Close()
 	}
 
-	stem := fmt.Sprintf("%s_%s", strings.ToLower(b2g.ident), tgt.clang)
-	if tgt.linux != "" {
-		stem = fmt.Sprintf("%s_%s_%s", strings.ToLower(b2g.ident), tgt.clang, tgt.linux)
+	outputStem := b2g.outputStem
+	if outputStem == "" {
+		outputStem = strings.ToLower(b2g.identStem)
 	}
 
-	objFileName := filepath.Join(b2g.outputDir, stem+".o")
+	stem := fmt.Sprintf("%s_%s%s", outputStem, tgt.Suffix(), b2g.outputSuffix)
+
+	absOutPath, err := filepath.Abs(b2g.outputDir)
+	if err != nil {
+		return err
+	}
+
+	objFileName := filepath.Join(absOutPath, stem+".o")
 
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	var tags []string
-	if len(arches) > 0 {
-		tags = append(tags, strings.Join(arches, " "))
-	}
-	if b2g.tags != "" {
-		tags = append(tags, b2g.tags)
-	}
+	archConstraint := goarches.Constraint()
+	constraints := andConstraints(archConstraint, b2g.tags.Expr)
 
-	cFlags := make([]string, len(b2g.cFlags))
-	copy(cFlags, b2g.cFlags)
-	if tgt.linux != "" {
-		cFlags = append(cFlags, "-D__TARGET_ARCH_"+tgt.linux)
+	if err := b2g.removeOldOutputFiles(outputStem, tgt); err != nil {
+		return fmt.Errorf("remove obsolete output: %w", err)
 	}
 
-	var dep bytes.Buffer
-	err = compile(compileArgs{
-		cc:     b2g.cc,
-		cFlags: cFlags,
-		target: tgt.clang,
-		dir:    cwd,
-		source: b2g.sourceFile,
-		dest:   objFileName,
-		dep:    &dep,
-	})
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintln(b2g.stdout, "Compiled", objFileName)
-
-	if !b2g.disableStripping {
-		if err := strip(b2g.strip, objFileName); err != nil {
+	var depInput *os.File
+	cFlags := slices.Clone(b2g.cFlags)
+	if b2g.makeBase != "" {
+		depInput, err = os.CreateTemp("", "bpf2go")
+		if err != nil {
 			return err
 		}
-		fmt.Fprintln(b2g.stdout, "Stripped", objFileName)
+		defer depInput.Close()
+		defer os.Remove(depInput.Name())
+
+		cFlags = append(cFlags,
+			// Output dependency information.
+			"-MD",
+			// Create phony targets so that deleting a dependency doesn't
+			// break the build.
+			"-MP",
+			// Write it to temporary file
+			"-MF"+depInput.Name(),
+		)
+	}
+
+	err = gen.Compile(gen.CompileArgs{
+		CC:               b2g.cc,
+		Strip:            b2g.strip,
+		DisableStripping: b2g.disableStripping,
+		Flags:            cFlags,
+		Target:           tgt,
+		Workdir:          cwd,
+		Source:           b2g.sourceFile,
+		Dest:             objFileName,
+	})
+	if err != nil {
+		return fmt.Errorf("compile: %w", err)
+	}
+
+	if b2g.disableStripping {
+		b2g.Debugln("Compiled object", "file", objFileName)
+	} else {
+		b2g.Debugln("Compiled and stripped object", "file", objFileName)
+	}
+
+	spec, err := ebpf.LoadCollectionSpec(objFileName)
+	if err != nil {
+		return fmt.Errorf("can't load BPF from ELF: %s", err)
+	}
+
+	var maps []string
+	for name := range spec.Maps {
+		// Skip .rodata, .data, .bss, etc. sections
+		if !strings.HasPrefix(name, ".") {
+			maps = append(maps, name)
+		}
+	}
+
+	var variables []string
+	for name := range spec.Variables {
+		variables = append(variables, name)
+	}
+
+	var programs []string
+	for name := range spec.Programs {
+		programs = append(programs, name)
+	}
+
+	types, err := collectCTypes(spec.Types, b2g.cTypes)
+	if err != nil {
+		return fmt.Errorf("collect C types: %w", err)
+	}
+
+	if !b2g.skipGlobalTypes {
+		types = append(types, gen.CollectGlobalTypes(spec)...)
 	}
 
 	// Write out generated go
-	goFileName := filepath.Join(b2g.outputDir, stem+".go")
+	goFileName := filepath.Join(absOutPath, stem+".go")
 	goFile, err := os.Create(goFileName)
 	if err != nil {
 		return err
 	}
 	defer removeOnError(goFile)
 
-	err = writeCommon(writeArgs{
-		pkg:   b2g.pkg,
-		ident: b2g.ident,
-		tags:  tags,
-		obj:   objFileName,
-		out:   goFile,
+	err = gen.Generate(gen.GenerateArgs{
+		Package:     b2g.pkg,
+		Stem:        b2g.identStem,
+		Constraints: constraints,
+		Maps:        maps,
+		Variables:   variables,
+		Programs:    programs,
+		Types:       types,
+		ObjectFile:  filepath.Base(objFileName),
+		Output:      goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)
 	}
 
-	fmt.Fprintln(b2g.stdout, "Wrote", goFileName)
+	b2g.Debugln("Generated bpf2go binding", "file", goFileName)
 
 	if b2g.makeBase == "" {
 		return
 	}
 
-	deps, err := parseDependencies(cwd, &dep)
+	deps, err := parseDependencies(cwd, depInput)
 	if err != nil {
 		return fmt.Errorf("can't read dependency information: %s", err)
 	}
 
+	depFileName := goFileName + ".d"
+	depOutput, err := os.Create(depFileName)
+	if err != nil {
+		return fmt.Errorf("write make dependencies: %w", err)
+	}
+	defer depOutput.Close()
+
 	// There is always at least a dependency for the main file.
 	deps[0].file = goFileName
-	depFile, err := adjustDependencies(b2g.makeBase, deps)
-	if err != nil {
+	if err := adjustDependencies(depOutput, b2g.makeBase, deps); err != nil {
 		return fmt.Errorf("can't adjust dependency information: %s", err)
 	}
 
-	depFileName := goFileName + ".d"
-	if err := os.WriteFile(depFileName, depFile, 0666); err != nil {
-		return fmt.Errorf("can't write dependency file: %s", err)
-	}
+	b2g.Debugln("Wrote dependency", "file", depFileName)
 
-	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)
 	return nil
 }
 
-type target struct {
-	clang string
-	linux string
+// removeOldOutputFiles removes output files generated by an old naming scheme.
+//
+// In the old scheme some linux targets were interpreted as build constraints
+// by the go toolchain.
+func (b2g *bpf2go) removeOldOutputFiles(outputStem string, tgt gen.Target) error {
+	suffix := tgt.ObsoleteSuffix()
+	if suffix == "" {
+		return nil
+	}
+
+	stem := fmt.Sprintf("%s_%s", outputStem, suffix)
+	for _, ext := range []string{".o", ".go"} {
+		filename := filepath.Join(b2g.outputDir, stem+ext)
+
+		if err := os.Remove(filename); errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return err
+		}
+
+		b2g.Debugln("Removed obsolete output file", "file", filename)
+	}
+
+	return nil
 }
 
 func printTargets(w io.Writer) {
 	var arches []string
-	for arch, archTarget := range targetByGoArch {
-		if archTarget.linux == "" {
+	for goarch, archTarget := range gen.TargetsByGoArch() {
+		if archTarget.IsGeneric() {
 			continue
 		}
-		arches = append(arches, arch)
+		arches = append(arches, string(goarch))
 	}
 	sort.Strings(arches)
 
@@ -342,58 +522,22 @@ func printTargets(w io.Writer) {
 	}
 }
 
-var errInvalidTarget = errors.New("unsupported target")
-
-func collectTargets(targets []string) (map[target][]string, error) {
-	result := make(map[target][]string)
-	for _, tgt := range targets {
-		switch tgt {
-		case "bpf", "bpfel", "bpfeb":
-			var goarches []string
-			for arch, archTarget := range targetByGoArch {
-				if archTarget.clang == tgt {
-					// Include tags for all goarches that have the same endianness.
-					goarches = append(goarches, arch)
-				}
-			}
-			sort.Strings(goarches)
-			result[target{tgt, ""}] = goarches
-
-		case "native":
-			tgt = runtime.GOARCH
-			fallthrough
-
-		default:
-			archTarget, ok := targetByGoArch[tgt]
-			if !ok || archTarget.linux == "" {
-				return nil, fmt.Errorf("%q: %w", tgt, errInvalidTarget)
-			}
-
-			var goarches []string
-			for goarch, lt := range targetByGoArch {
-				if lt == archTarget {
-					// Include tags for all goarches that have the same
-					// target.
-					goarches = append(goarches, goarch)
-				}
-			}
-
-			sort.Strings(goarches)
-			result[archTarget] = goarches
+func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
+	var result []btf.Type
+	for _, cType := range names {
+		typ, err := types.AnyTypeByName(cType)
+		if err != nil {
+			return nil, err
 		}
+		result = append(result, typ)
 	}
-
 	return result, nil
 }
 
-func main() {
-	outputDir, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
-	}
+const gopackageEnv = "GOPACKAGE"
 
-	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), outputDir, os.Args[1:]); err != nil {
+func main() {
+	if err := run(os.Stdout, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/big"
 	"math/rand"
 	"net"
+	"net/netip"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -23,7 +25,6 @@ import (
 	"github.com/PapyrusVIP/isomer/internal/log"
 	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"golang.org/x/sys/unix"
-	"inet.af/netaddr"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -969,13 +970,13 @@ func BenchmarkDispatcherAddBinding(b *testing.B) {
 func BenchmarkDispatcherManyBindings(b *testing.B) {
 	const label = "some-label"
 
-	var v4, v6 []netaddr.IP
+	var v4, v6 []netip.Addr
 	bindings := mustReadBindings(b, label)
 	for _, bind := range bindings {
-		if bind.Prefix.IP().Is4() {
-			v4 = append(v4, bind.Prefix.IP())
+		if bind.Prefix.Addr().Is4() {
+			v4 = append(v4, bind.Prefix.Addr())
 		} else {
-			v6 = append(v6, bind.Prefix.IP())
+			v6 = append(v6, bind.Prefix.Addr())
 		}
 	}
 	b.Log(len(bindings), "bindings")
@@ -1001,7 +1002,7 @@ func BenchmarkDispatcherManyBindings(b *testing.B) {
 	targets := []struct {
 		name   string
 		listen string
-		addr   netaddr.IP
+		addr   netip.Addr
 	}{
 		{"IPv4", "127.0.0.1:0", v4[rand.Intn(len(v4))]},
 		{"IPv6", "[::1]:0", v6[rand.Intn(len(v6))]},
@@ -1049,7 +1050,7 @@ func BenchmarkDispatcherManyBindings(b *testing.B) {
 			defer src.Close()
 
 			b.ResetTimer()
-			addr := &net.UDPAddr{IP: target.addr.IPAddr().IP, Port: 53}
+			addr := &net.UDPAddr{IP: net.IP(target.addr.AsSlice()), Port: 53}
 			for i := 0; i < b.N; i++ {
 				if _, err := src.WriteToUDP(buf, addr); err != nil {
 					b.Fatal(err)
@@ -1063,18 +1064,18 @@ func BenchmarkDispatcherManyBindings(b *testing.B) {
 			}
 			defer prog.Close()
 
-			info, err := prog.Info()
+			stats, err := prog.Stats()
 			if err != nil {
-				b.Fatal("Get program info:", err)
+				b.Fatal("Get program stats:", err)
 			}
 
-			n, _ := info.RunCount()
+			n := stats.RunCount
 			if n != uint64(b.N) {
 				// sk_lookup runs when we send a packet, and when we get a response.
 				b.Fatalf("Expected %d iterations, got %d", b.N, n)
 			}
 
-			duration, _ := info.Runtime()
+			duration := stats.Runtime
 			b.ReportMetric(float64(duration.Nanoseconds())/float64(n), "ns/op")
 		})
 	}
@@ -1199,17 +1200,37 @@ func mustReadBindings(tb testing.TB, label string) []*Binding {
 
 	var bindings []*Binding
 	for _, prefixStr := range prefixes {
-		prefix, err := netaddr.ParseIPPrefix(prefixStr)
+		prefix, err := netip.ParsePrefix(prefixStr)
 		if err != nil {
 			tb.Fatal(err)
 		}
 
-		r := prefix.Range()
-		for ip := r.From(); ip.Compare(r.To()) <= 0; ip = ip.Next() {
+		base, last := PrefixRange(prefix)
+		for ip := base; ip.Compare(last) <= 0; ip = ip.Next() {
 			bind := mustNewBinding(tb, label, UDP, ip.String(), 53)
 			bindings = append(bindings, bind)
 		}
 	}
 
 	return bindings
+}
+
+// Range returns the base Addr and last Addr in the prefix.
+func PrefixRange(p netip.Prefix) (base, last netip.Addr) {
+	if !p.IsValid() {
+    	return
+	}
+
+	base = p.Masked().Addr()
+	hostBits := base.BitLen() - p.Bits()
+	baseInt := new(big.Int).SetBytes(base.AsSlice())
+
+	add := new(big.Int).Lsh(big.NewInt(1), uint(hostBits))
+	add.Sub(add, big.NewInt(1))
+	
+	lastInt := new(big.Int).Add(baseInt, add)
+	lastBytes := lastInt.FillBytes(make([]byte, len(base.AsSlice())))
+	last, _ = netip.AddrFromSlice(lastBytes)
+
+	return base, last
 }

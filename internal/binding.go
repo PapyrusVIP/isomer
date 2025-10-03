@@ -2,10 +2,8 @@ package internal
 
 import (
 	"fmt"
-	"strings"
 	"unsafe"
-
-	"inet.af/netaddr"
+	"net/netip"
 )
 
 // A Binding selects which packets to redirect.
@@ -14,7 +12,7 @@ import (
 type Binding struct {
 	Label    string
 	Protocol Protocol
-	Prefix   netaddr.IPPrefix
+	Prefix   netip.Prefix
 	Port     uint16
 }
 
@@ -23,7 +21,7 @@ type Binding struct {
 // prefix may either be in CIDR notation (::1/128) or a plain IP address.
 // Specifying ::1 is equivalent to passing ::1/128.
 func NewBinding(label string, proto Protocol, prefix string, port uint16) (*Binding, error) {
-	cidr, err := ParsePrefix(prefix)
+	cidr, err := netip.ParsePrefix(prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -31,26 +29,26 @@ func NewBinding(label string, proto Protocol, prefix string, port uint16) (*Bind
 	return &Binding{
 		label,
 		proto,
-		netaddr.IPPrefixFrom(cidr.IP(), cidr.Bits()).Masked(),
+		cidr,
 		port,
 	}, nil
 }
 
 func newBindingFromBPF(label string, key *bindingKey) *Binding {
 	ones := uint8(key.PrefixLen) - bindingKeyHeaderBits
-	ip := netaddr.IPFrom16(key.IP)
+	ip := netip.AddrFrom16(key.IP)
 
-	var prefix netaddr.IPPrefix
+	var prefix netip.Prefix
 	if ip.Is4() {
-		prefix = netaddr.IPPrefixFrom(ip, ones-96)
+		prefix = netip.PrefixFrom(ip, int(ones-96))
 	} else {
-		prefix = netaddr.IPPrefixFrom(ip, ones)
+		prefix = netip.PrefixFrom(ip, int(ones))
 	}
 
 	return &Binding{
 		label,
 		key.Protocol,
-		prefix.Masked(),
+		prefix,
 		key.Port,
 	}
 }
@@ -74,15 +72,15 @@ func newBindingKey(bind *Binding) *bindingKey {
 	prefixLen := bind.Prefix.Bits()
 
 	// If the prefix is v4, offset it by 96
-	if bind.Prefix.IP().Is4() {
+	if bind.Prefix.Addr().Is4() {
 		prefixLen += 96
 	}
 
 	key := bindingKey{
-		PrefixLen: uint32(bindingKeyHeaderBits + prefixLen),
+		PrefixLen: uint32(bindingKeyHeaderBits + uint8(prefixLen)),
 		Protocol:  bind.Protocol,
 		Port:      bind.Port,
-		IP:        bind.Prefix.IP().As16(),
+		IP:        bind.Prefix.Addr().As16(),
 	}
 
 	return &key
@@ -109,8 +107,8 @@ func (sb Bindings) Less(i, j int) bool {
 		return a.Protocol < b.Protocol
 	}
 
-	if a.Prefix.IP().Is4() != b.Prefix.IP().Is4() {
-		return a.Prefix.IP().Is4()
+	if a.Prefix.Addr().Is4() != b.Prefix.Addr().Is4() {
+		return a.Prefix.Addr().Is4()
 	}
 
 	// We only care to sort on overlap if the prefix length is different
@@ -120,7 +118,7 @@ func (sb Bindings) Less(i, j int) bool {
 		return a.Prefix.Bits() > b.Prefix.Bits()
 	}
 
-	if c := a.Prefix.IP().Compare(b.Prefix.IP()); c != 0 {
+	if c := a.Prefix.Addr().Compare(b.Prefix.Addr()); c != 0 {
 		// Prefixes don't share a prefix, use lexicographical order.
 		return c < 0
 	}
@@ -145,7 +143,7 @@ func (bindings Bindings) metrics() map[Destination]uint64 {
 	for _, b := range bindings {
 		label := b.Label
 		domain := AF_INET
-		if b.Prefix.IP().Unmap().Is6() {
+		if b.Prefix.Addr().Unmap().Is6() {
 			domain = AF_INET6
 		}
 		protocol := b.Protocol
@@ -169,27 +167,4 @@ func diffBindings(have, want map[bindingKey]string) (added, removed Bindings) {
 	}
 
 	return
-}
-
-// ParsePrefix parses a prefix with an optional mask into an IPPrefix.
-//
-// A missing prefix is interpreted as a /128 or /32.
-func ParsePrefix(prefix string) (netaddr.IPPrefix, error) {
-	if strings.ContainsRune(prefix, '/') {
-		return netaddr.ParseIPPrefix(prefix)
-	}
-
-	ip, err := netaddr.ParseIP(prefix)
-	if err != nil {
-		return netaddr.IPPrefix{}, err
-	}
-
-	var prefixBits uint8
-	if ip.Is4() {
-		prefixBits = 32
-	} else {
-		prefixBits = 128
-	}
-
-	return netaddr.IPPrefixFrom(ip, prefixBits), nil
 }

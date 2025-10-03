@@ -2,18 +2,17 @@ package testutil
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
 	"syscall"
 	"testing"
-	"time"
+	"math/big"
 
 	"github.com/PapyrusVIP/isomer/internal/sysconn"
-
 	"golang.org/x/sys/unix"
 )
 
@@ -37,8 +36,6 @@ func FileStatusFlags(tb testing.TB, conn syscall.Conn) int {
 func OpenFiles(tb testing.TB, n int) []*os.File {
 	tb.Helper()
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	var files []*os.File
 	tb.Cleanup(func() {
 		for _, file := range files {
@@ -52,7 +49,12 @@ func OpenFiles(tb testing.TB, n int) []*os.File {
 			Close() error
 		}
 
-		switch rng.Intn(3) {
+		num, err := rand.Int(rand.Reader, big.NewInt(3))
+		if err != nil {
+			tb.Fatal("Rand:", err)
+		}
+
+		switch num.Int64() {
 		case 0:
 			a, b, err := os.Pipe()
 			if err != nil {

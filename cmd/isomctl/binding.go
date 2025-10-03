@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"text/tabwriter"
 
 	"github.com/PapyrusVIP/isomer/internal"
-	"inet.af/netaddr"
 )
 
 func bindings(e *env, args ...string) error {
@@ -31,10 +31,10 @@ func bindings(e *env, args ...string) error {
 		}
 	}
 
-	var prefix netaddr.IPPrefix
+	var prefix netip.Prefix
 	var err error
 	if set.NArg() >= 2 {
-		prefix, err = internal.ParsePrefix(set.Arg(1))
+		prefix, err = netip.ParsePrefix(set.Arg(1))
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func bindings(e *env, args ...string) error {
 			continue
 		}
 
-		if !prefix.IsZero() && !prefix.Overlaps(bind.Prefix) {
+		if prefix.IsValid() && !prefix.Overlaps(bind.Prefix) {
 			continue
 		}
 
@@ -176,7 +176,7 @@ func bindingFromArgs(args []string) (*internal.Binding, error) {
 
 type bindingJSON struct {
 	Label  string           `json:"label"`
-	Prefix netaddr.IPPrefix `json:"prefix"`
+	Prefix netip.Prefix 	`json:"prefix"`
 	Port   *uint16          `json:"port"`
 }
 
@@ -190,7 +190,7 @@ func loadBindings(e *env, args ...string) error {
 		port := uint16(80)
 		example := configJSON{
 			Bindings: []bindingJSON{
-				{"foo", netaddr.MustParseIPPrefix("127.0.0.1/32"), &port},
+				{"foo", netip.MustParsePrefix("127.0.0.1/32"), &port},
 			},
 		}
 

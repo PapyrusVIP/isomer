@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/netip"
 	"syscall"
 	"testing"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/PapyrusVIP/isomer/internal/testutil"
 
 	"github.com/google/go-cmp/cmp"
-	"inet.af/netaddr"
 )
 
 func TestFilter(t *testing.T) {
@@ -105,7 +105,7 @@ func TestLocalAddress(t *testing.T) {
 	}
 
 	var valid []test
-	addValid := func(network string, conn syscall.Conn, ip netaddr.IP, port int) {
+	addValid := func(network string, conn syscall.Conn, ip netip.Addr, port int) {
 		valid = append(valid,
 			test{
 				fmt.Sprint(network, " ip and port"),
@@ -136,7 +136,7 @@ func TestLocalAddress(t *testing.T) {
 		defer tcp.Close()
 
 		addr := tcp.Addr().(*net.TCPAddr)
-		ip, _ := netaddr.FromStdIP(addr.IP)
+		ip, _ := netip.AddrFromSlice(addr.IP)
 		addValid("tcp", tcp.(syscall.Conn), ip, addr.Port)
 	}
 
@@ -148,7 +148,7 @@ func TestLocalAddress(t *testing.T) {
 		defer udp.Close()
 
 		addr := udp.LocalAddr().(*net.UDPAddr)
-		ip, _ := netaddr.FromStdIP(addr.IP)
+		ip, _ := netip.AddrFromSlice(addr.IP)
 		addValid("udp", udp.(syscall.Conn), ip, addr.Port)
 	}
 
@@ -160,7 +160,7 @@ func TestLocalAddress(t *testing.T) {
 
 	valid = append(valid, test{
 		"unix",
-		sysconn.LocalAddress(netaddr.IP{}, 0),
+		sysconn.LocalAddress(netip.Addr{}, 0),
 		unixConn,
 		false,
 	})
@@ -186,7 +186,7 @@ func TestLocalAddress(t *testing.T) {
 	invalid := []test{
 		{
 			"file",
-			sysconn.LocalAddress(netaddr.IP{}, 0),
+			sysconn.LocalAddress(netip.Addr{}, 0),
 			file,
 			false,
 		},

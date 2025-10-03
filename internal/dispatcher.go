@@ -449,7 +449,7 @@ func (p Protocol) String() string {
 func (d *Dispatcher) AddBinding(bind *Binding) error {
 	dest := newDestinationFromBinding(bind)
 
-	if bind.Prefix.IP().Is4in6() {
+	if bind.Prefix.Addr().Is4In6() {
 		return fmt.Errorf("prefix cannot be v4-mapped v6: %v", bind.Prefix)
 	}
 

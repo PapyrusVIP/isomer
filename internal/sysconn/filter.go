@@ -3,10 +3,10 @@ package sysconn
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"syscall"
 
 	"golang.org/x/sys/unix"
-	"inet.af/netaddr"
 )
 
 // Predicate is a condition for keeping or rejecting a file.
@@ -58,7 +58,7 @@ func Filter(conns []syscall.Conn, ps ...Predicate) ([]syscall.Conn, error) {
 func FirstReuseport() Predicate {
 	type key struct {
 		proto int
-		ip    netaddr.IP
+		ip    netip.Addr
 		port  uint16
 	}
 
@@ -85,10 +85,10 @@ func FirstReuseport() Predicate {
 		k := key{proto: proto}
 		switch addr := sa.(type) {
 		case *unix.SockaddrInet4:
-			k.ip, _ = netaddr.FromStdIP(addr.Addr[:])
+			k.ip = netip.AddrFrom4(addr.Addr)
 			k.port = uint16(addr.Port)
 		case *unix.SockaddrInet6:
-			k.ip = netaddr.IPv6Raw(addr.Addr)
+			k.ip = netip.AddrFrom16(addr.Addr)
 			k.port = uint16(addr.Port)
 		default:
 			return false, fmt.Errorf("unsupported address family: %T", sa)
@@ -179,22 +179,22 @@ func InetListener(network string) Predicate {
 }
 
 // LocalAddress filters for sockets with the given address and port.
-func LocalAddress(ip netaddr.IP, port int) Predicate {
+func LocalAddress(ip netip.Addr, port int) Predicate {
 	return func(fd int) (bool, error) {
 		sa, err := unix.Getsockname(fd)
 		if err != nil {
 			return false, fmt.Errorf("getsockname: %s", err)
 		}
 
-		var fdIP netaddr.IP
+		var fdIP netip.Addr
 		var fdPort int
 		switch addr := sa.(type) {
 		case *unix.SockaddrInet4:
-			fdIP, _ = netaddr.FromStdIP(addr.Addr[:])
+			fdIP = netip.AddrFrom4(addr.Addr)
 			fdPort = addr.Port
 
 		case *unix.SockaddrInet6:
-			fdIP = netaddr.IPv6Raw(addr.Addr)
+			fdIP = netip.AddrFrom16(addr.Addr)
 			fdPort = addr.Port
 
 		default:

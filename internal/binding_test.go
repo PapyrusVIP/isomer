@@ -3,13 +3,13 @@ package internal
 import (
 	"fmt"
 	"math/rand"
+	"net/netip"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"github.com/google/go-cmp/cmp"
-	"inet.af/netaddr"
 )
 
 func TestBinding(t *testing.T) {
@@ -31,7 +31,7 @@ func TestBinding(t *testing.T) {
 
 	for _, tc := range valid {
 		t.Run(tc.prefix, func(t *testing.T) {
-			ip, err := netaddr.ParseIP(tc.ip)
+			ip, err := netip.ParseAddr(tc.ip)
 			if err != nil {
 				t.Fatal("Can't parse IP:", tc.ip, err)
 			}
@@ -41,11 +41,11 @@ func TestBinding(t *testing.T) {
 				t.Fatal("Can't create binding:", tc.prefix, err)
 			}
 
-			if bind.Prefix.IP() != ip {
-				t.Errorf("Binding IP doesn't match: %s != %s", bind.Prefix.IP(), ip)
+			if bind.Prefix.Addr() != ip {
+				t.Errorf("Binding IP doesn't match: %s != %s", bind.Prefix.Addr(), ip)
 			}
 
-			if bind.Prefix.Bits() != tc.maskLen {
+			if bind.Prefix.Bits() != int(tc.maskLen) {
 				t.Errorf("Binding mask has wrong length: %d != %d", bind.Prefix.Bits(), tc.maskLen)
 			}
 		})
@@ -171,11 +171,11 @@ func TestBindingsSortMatchesDataplane(t *testing.T) {
 			}
 
 			addrFmt := "%s:%d"
-			if test.win.Prefix.IP().Is6() {
+			if test.win.Prefix.Addr().Is6() {
 				addrFmt = "[%s]:%d"
 			}
 
-			addr := fmt.Sprintf(addrFmt, test.win.Prefix.IP(), 80)
+			addr := fmt.Sprintf(addrFmt, test.win.Prefix.Addr(), 80)
 			testutil.CanDialName(t, netns, "tcp", addr, test.win.Label)
 		})
 	}
@@ -222,22 +222,22 @@ func TestBindingsSortIsGoodForHumans(t *testing.T) {
 func TestParseCIDR(t *testing.T) {
 	valid := []struct {
 		input    string
-		expected netaddr.IPPrefix
+		expected netip.Prefix
 	}{
-		{"127.0.0.1", netaddr.IPPrefixFrom(netaddr.IPv4(127, 0, 0, 1), 32)},
-		{"127.0.0.1/24", netaddr.IPPrefixFrom(netaddr.IPv4(127, 0, 0, 1), 24)},
-		{"127.0.0.1/32", netaddr.IPPrefixFrom(netaddr.IPv4(127, 0, 0, 1), 32)},
-		{"2001:20::1", netaddr.IPPrefixFrom(netaddr.IPv6Raw([16]byte{0x20, 0x01, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}), 128)},
-		{"2001:20::1/64", netaddr.IPPrefixFrom(netaddr.IPv6Raw([16]byte{0x20, 0x01, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}), 64)},
-		{"2001:20::1/128", netaddr.IPPrefixFrom(netaddr.IPv6Raw([16]byte{0x20, 0x01, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}), 128)},
-		{"0.0.0.0", netaddr.IPPrefixFrom(netaddr.IPv4(0, 0, 0, 0), 32)},
-		{"0.0.0.0/0", netaddr.IPPrefixFrom(netaddr.IPv4(0, 0, 0, 0), 0)},
-		{"::", netaddr.IPPrefixFrom(netaddr.IPv6Raw([16]byte{}), 128)},
-		{"::/0", netaddr.IPPrefixFrom(netaddr.IPv6Raw([16]byte{}), 0)},
+		{"127.0.0.1", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 32)},
+		{"127.0.0.1/24", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 24)},
+		{"127.0.0.1/32", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 32)},
+		{"2001:20::1", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 128)},
+		{"2001:20::1/64", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 64)},
+		{"2001:20::1/128", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 128)},
+		{"0.0.0.0", netip.PrefixFrom(netip.MustParseAddr("0.0.0.0"), 32)},
+		{"0.0.0.0/0", netip.PrefixFrom(netip.MustParseAddr("0.0.0.0"), 0)},
+		{"::", netip.PrefixFrom(netip.MustParseAddr("::"), 128)},
+		{"::/0", netip.PrefixFrom(netip.MustParseAddr("::"), 0)},
 	}
 
 	for _, testCase := range valid {
-		output, err := ParsePrefix(testCase.input)
+		output, err := netip.ParsePrefix(testCase.input)
 		if err != nil {
 			t.Errorf("Rejected valid input prefix %s\n", testCase.input)
 		}
