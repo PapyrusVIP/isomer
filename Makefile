@@ -3,6 +3,8 @@ VERSION := $(shell git describe --always --dirty="-dev")
 ARCH    ?= amd64
 
 export GOFLAGS += -mod=vendor -ldflags=-X=main.Version=$(VERSION)
+export CLANG = clang
+export STRIP = llvm-strip
 export MAKEDIR  = $(CURDIR)
 
 .SUFFIXES:
