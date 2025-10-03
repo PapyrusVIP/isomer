@@ -19,9 +19,13 @@ jobs:
       with:
         go-version: 1.25.1
 
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: "21.1.0"
+
     - name: Install prerequisites
       run: |
-        sudo ./.github/llvm.sh 13
         sudo apt-get -y --no-install-recommends install build-essential qemu-system-x86 python3-pip wget
         sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
 
