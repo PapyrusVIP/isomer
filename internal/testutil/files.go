@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
@@ -10,7 +9,7 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
-	"math/big"
+	"math/rand/v2"
 
 	"github.com/PapyrusVIP/isomer/internal/sysconn"
 	"golang.org/x/sys/unix"
@@ -49,12 +48,7 @@ func OpenFiles(tb testing.TB, n int) []*os.File {
 			Close() error
 		}
 
-		num, err := rand.Int(rand.Reader, big.NewInt(3))
-		if err != nil {
-			tb.Fatal("Rand:", err)
-		}
-
-		switch num.Int64() {
+		switch rand.IntN(3) {
 		case 0:
 			a, b, err := os.Pipe()
 			if err != nil {

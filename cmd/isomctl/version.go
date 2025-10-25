@@ -14,6 +14,7 @@ func version(e *env, args ...string) error {
 		return err
 	}
 
-	e.stdout.Logf("isomctl version: %s (go runtime %s)\n", Version, runtime.Version())
+	e.stdout.Logf("isomctl version: %s (go runtime %s %s/%s)\n", Version,
+		runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	return nil
 }

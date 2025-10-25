@@ -1,15 +1,13 @@
-name: Go
+name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
+  push:
     branches:
       - main
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -22,12 +20,7 @@ jobs:
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v2
       with:
-        version: "20.1.4"
-
-    - name: Install prerequisites
-      run: |
-        sudo apt-get -y --no-install-recommends install build-essential qemu-system-x86 python3-pip wget
-        sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+        version: 20.1.4
 
     - name: Build
       run: make

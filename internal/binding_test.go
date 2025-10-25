@@ -2,11 +2,10 @@ package internal
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/netip"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"github.com/google/go-cmp/cmp"
@@ -96,10 +95,10 @@ func TestBindingsSortMatchesDataplane(t *testing.T) {
 		mustRegisterSocket(t, dp, label, ln)
 	}
 
-	seed := time.Now().UnixNano()
-	t.Log("Seed is", seed)
-	rng := rand.New(rand.NewSource(seed))
-
+	seed1, seed2 := rand.Uint64(), rand.Uint64()
+	t.Log("Seed is", seed1, seed2)
+	rng := rand.New(rand.NewPCG(seed1, seed2))
+	
 	rng.Shuffle(len(labels), func(i, j int) { labels[i], labels[j] = labels[j], labels[i] })
 
 	// The sort ordering of the labels can hide issues with the implementation.
@@ -203,9 +202,9 @@ func TestBindingsSortIsGoodForHumans(t *testing.T) {
 		},
 	}
 
-	seed := time.Now().UnixNano()
-	t.Log("Seed is", seed)
-	rng := rand.New(rand.NewSource(seed))
+	seed1, seed2 := rand.Uint64(), rand.Uint64()
+	t.Log("Seed is", seed1, seed2)
+	rng := rand.New(rand.NewPCG(seed1, seed2))
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -224,20 +223,20 @@ func TestParseCIDR(t *testing.T) {
 		input    string
 		expected netip.Prefix
 	}{
-		{"127.0.0.1", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 32)},
-		{"127.0.0.1/24", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 24)},
-		{"127.0.0.1/32", netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 32)},
-		{"2001:20::1", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 128)},
-		{"2001:20::1/64", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 64)},
-		{"2001:20::1/128", netip.PrefixFrom(netip.MustParseAddr("2001:20::1"), 128)},
-		{"0.0.0.0", netip.PrefixFrom(netip.MustParseAddr("0.0.0.0"), 32)},
-		{"0.0.0.0/0", netip.PrefixFrom(netip.MustParseAddr("0.0.0.0"), 0)},
-		{"::", netip.PrefixFrom(netip.MustParseAddr("::"), 128)},
-		{"::/0", netip.PrefixFrom(netip.MustParseAddr("::"), 0)},
+		{"127.0.0.1", MustParsePrefix("127.0.0.1")},
+		{"127.0.0.1/24", MustParsePrefix("127.0.0.1/24")},
+		{"127.0.0.1/32", MustParsePrefix("127.0.0.1/32")},
+		{"2001:20::1", MustParsePrefix("2001:20::1")},
+		{"2001:20::1/64", MustParsePrefix("2001:20::1/64")},
+		{"2001:20::1/128", MustParsePrefix("2001:20::1/128")},
+		{"0.0.0.0", MustParsePrefix("0.0.0.0")},
+		{"0.0.0.0/0", MustParsePrefix("0.0.0.0/0")},
+		{"::", MustParsePrefix("::")},
+		{"::/0", MustParsePrefix("::/0")},
 	}
 
 	for _, testCase := range valid {
-		output, err := netip.ParsePrefix(testCase.input)
+		output, err := ParsePrefix(testCase.input)
 		if err != nil {
 			t.Errorf("Rejected valid input prefix %s\n", testCase.input)
 		}

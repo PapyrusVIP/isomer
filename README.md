@@ -12,7 +12,7 @@ Unlike the fixed model of BSD `bind`, Isomer gives you a programmable control pl
 
 **Note:** Requires at least Linux v5.10 which is when the [`sk_lookup`](https://www.kernel.org/doc/html/v5.10/bpf/prog_sk_lookup.html) program type was released.
 
-#### We wanna hear your feedback, please open issues if you have any feature requests or bug reports! Feel free to star the project if you like it :)
+> We want to hear your feedback, please open issues if you have any feature requests or bug reports! Feel free to star the project if you like it!
 
 ## Quickstart
 

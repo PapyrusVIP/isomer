@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -251,7 +250,7 @@ func echo(tb testing.TB, network string, sys syscall.Conn, name string) {
 					return
 				}
 
-				_, err = io.Copy(ioutil.Discard, conn)
+				_, err = io.Copy(io.Discard, conn)
 				if err != nil {
 					tb.Error(err)
 				}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,7 +58,7 @@ func CreateDispatcher(netnsPath, bpfFsPath string) (_ *Dispatcher, err error) {
 	}
 	defer netns.Close()
 
-	tempDir, err := ioutil.TempDir(filepath.Dir(pinPath), "isomer-*")
+	tempDir, err := os.MkdirTemp(filepath.Dir(pinPath), "isomer-*")
 	if err != nil {
 		return nil, fmt.Errorf("can't create temp directory: %s", err)
 	}
@@ -450,7 +449,7 @@ func (d *Dispatcher) AddBinding(bind *Binding) error {
 	dest := newDestinationFromBinding(bind)
 
 	if bind.Prefix.Addr().Is4In6() {
-		return fmt.Errorf("prefix cannot be v4-mapped v6: %v", bind.Prefix)
+		return fmt.Errorf("prefix cannot be v4-mapped v6: %v", bind.Prefix) // why?
 	}
 
 	key := newBindingKey(bind)

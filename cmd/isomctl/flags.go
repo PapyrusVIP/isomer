@@ -17,7 +17,7 @@ type flagSet struct {
 
 // newFlagSet creates a flag set for a command with the given name.
 //
-// args contains both required an optional arguments, separated by the special
+// args contains both required and optional arguments, separated by the special
 // string "--".
 func newFlagSet(output io.Writer, name string, args ...string) *flagSet {
 	set := flag.NewFlagSet(name, flag.ContinueOnError)

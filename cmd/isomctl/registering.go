@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/netip"
 	"os"
 	"strconv"
@@ -82,7 +81,7 @@ func registerPID(e *env, args ...string) error {
 
 	pid, err := strconv.ParseInt(set.Arg(0), 10, 32)
 	if err != nil {
-		pidFile, pidErr := ioutil.ReadFile(set.Arg(0))
+		pidFile, pidErr := os.ReadFile(set.Arg(0))
 		if pidErr == nil {
 			pid, err = strconv.ParseInt(strings.Trim(string(pidFile), "\r\n"), 10, 32)
 		}
@@ -235,6 +234,45 @@ func namespacesEqual(want, have string) error {
 
 	if wantIno != haveIno {
 		return errors.New("can't register sockets from different network namespace")
+	}
+
+	return nil
+}
+
+func unregister(e *env, args ...string) error {
+	set := e.newFlagSet("unregister", "label", "domain", "proto")
+	set.Description = `
+		Removes the socket mapping for the given label, domain and protocol.
+
+		Examples:
+		  $ isomctl unregister foo ipv4 udp
+		  $ isomctl unregister bar ipv6 tcp
+		`
+
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+
+	label := set.Arg(0)
+
+	var domain internal.Domain
+	if err := domain.UnmarshalText([]byte(set.Arg(1))); err != nil {
+		return err
+	}
+
+	var proto internal.Protocol
+	if err := proto.UnmarshalText([]byte(set.Arg(2))); err != nil {
+		return err
+	}
+
+	dp, err := e.openDispatcher(false)
+	if err != nil {
+		return err
+	}
+	defer dp.Close()
+
+	if err := dp.UnregisterSocket(label, domain, proto); err != nil {
+		return err
 	}
 
 	return nil

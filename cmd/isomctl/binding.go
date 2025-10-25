@@ -12,7 +12,7 @@ import (
 )
 
 func bindings(e *env, args ...string) error {
-	set := e.newFlagSet("bindings", "--", "protocol", "prefix[/mask]", "port")
+	set := e.newFlagSet("bindings", "--", "protocol", "ip[/mask]", "port")
 	set.Description = `
 		List bindings which match certain criteria.
 
@@ -34,7 +34,7 @@ func bindings(e *env, args ...string) error {
 	var prefix netip.Prefix
 	var err error
 	if set.NArg() >= 2 {
-		prefix, err = netip.ParsePrefix(set.Arg(1))
+		prefix, err = internal.ParsePrefix(set.Arg(1))
 		if err != nil {
 			return err
 		}
@@ -190,7 +190,7 @@ func loadBindings(e *env, args ...string) error {
 		port := uint16(80)
 		example := configJSON{
 			Bindings: []bindingJSON{
-				{"foo", netip.MustParsePrefix("127.0.0.1/32"), &port},
+				{"foo", internal.MustParsePrefix("127.0.0.1/32"), &port},
 			},
 		}
 

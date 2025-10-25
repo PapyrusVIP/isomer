@@ -118,8 +118,6 @@ var cmds = []struct {
 	{"register", register, false},
 	{"register-pid", registerPID, false},
 	{"unregister", unregister, false},
-	// Deprecated
-	{"list", list, true},
 }
 
 func isomctl(e env, args []string) (err error) {

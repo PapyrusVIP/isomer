@@ -34,7 +34,7 @@ func TestCollector(t *testing.T) {
 
 	// Register an unconnected UDP socket and connect it afterwards to
 	// trigger bad-socket.
-	dp = mustOpenDispatcher(t, nil, netns)
+	dp = mustOpenDispatcher(t, netns)
 	conn := testutil.Listen(t, netns, "udp4", "").(*net.UDPConn)
 	mustRegisterSocket(t, dp, "bar", conn)
 	testutil.ConnectSocket(t, conn)

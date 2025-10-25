@@ -21,7 +21,7 @@ type Binding struct {
 // prefix may either be in CIDR notation (::1/128) or a plain IP address.
 // Specifying ::1 is equivalent to passing ::1/128.
 func NewBinding(label string, proto Protocol, prefix string, port uint16) (*Binding, error) {
-	cidr, err := netip.ParsePrefix(prefix)
+	cidr, err := ParsePrefix(prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -34,9 +34,32 @@ func NewBinding(label string, proto Protocol, prefix string, port uint16) (*Bind
 	}, nil
 }
 
+// ParsePrefix parses a prefix with an optional mask into an netip.Prefix.
+//
+// A missing prefix is interpreted as a /128 or /32.
+func ParsePrefix(p string) (netip.Prefix, error) {
+	addr, err := netip.ParseAddr(p)
+	if err == nil {
+		return netip.PrefixFrom(addr, addr.BitLen()), nil
+	}
+
+	return netip.ParsePrefix(p)
+}
+
+// MustParsePrefix calls ParsePrefix and panics on error. It is intended for use in tests with hard-coded strings.
+func MustParsePrefix(p string) netip.Prefix {
+	prefix, err := ParsePrefix(p)
+	if err != nil {
+		panic(err)
+	}
+
+	return prefix
+}
+
+
 func newBindingFromBPF(label string, key *bindingKey) *Binding {
 	ones := uint8(key.PrefixLen) - bindingKeyHeaderBits
-	ip := netip.AddrFrom16(key.IP)
+	ip := netip.AddrFrom16(key.IP).Unmap()
 
 	var prefix netip.Prefix
 	if ip.Is4() {

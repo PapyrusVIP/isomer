@@ -7,7 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"os"
@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/PapyrusVIP/isomer/internal/lock"
-	"github.com/PapyrusVIP/isomer/internal/log"
 	"github.com/PapyrusVIP/isomer/internal/testutil"
 	"golang.org/x/sys/unix"
 
@@ -35,7 +34,6 @@ import (
 
 func init() {
 	testutil.EnterUnprivilegedMode()
-	rand.Seed(time.Now().UnixNano())
 }
 
 func TestLoadDispatcher(t *testing.T) {
@@ -77,8 +75,7 @@ func TestUnloadDispatcher(t *testing.T) {
 		t.Fatal("No entries in state directory")
 	}
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	entry := entries[rng.Intn(len(entries))]
+	entry := entries[rand.IntN(len(entries))]
 	path := filepath.Join(dp.Path, entry.Name())
 
 	t.Log("Removing", path)
@@ -179,7 +176,7 @@ func TestDispatcherUpgrade(t *testing.T) {
 		}
 	}
 
-	dp = mustOpenDispatcher(t, nil, netns)
+	dp = mustOpenDispatcher(t, netns)
 	defer dp.Close()
 	check(dp)
 }
@@ -201,7 +198,7 @@ func TestDispatcherUpgradeFailedLinkUpdate(t *testing.T) {
 		t.Fatal("Upgrade didn't fail")
 	}
 
-	dp = mustOpenDispatcher(t, nil, netns)
+	dp = mustOpenDispatcher(t, netns)
 	defer dp.Close()
 	check(dp)
 }
@@ -501,7 +498,7 @@ func TestAddInvalidBinding(t *testing.T) {
 		name := fmt.Sprintf("%v %s", tc.Protocol, tc.Prefix)
 		t.Run(name, func(t *testing.T) {
 			if err := dp.AddBinding(tc.Binding); err == nil {
-				t.Fatal("Created/added an invalid binding:", tc.Binding.Prefix)
+				t.Fatal("Created/added an invalid binding:", tc.Prefix)
 			}
 		})
 	}
@@ -961,7 +958,7 @@ func BenchmarkDispatcherAddBinding(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bind := bindings[rand.Intn(len(bindings))]
+		bind := bindings[rand.IntN(len(bindings))]
 		mustAddBinding(b, dp, bind)
 	}
 	b.StopTimer()
@@ -1004,8 +1001,8 @@ func BenchmarkDispatcherManyBindings(b *testing.B) {
 		listen string
 		addr   netip.Addr
 	}{
-		{"IPv4", "127.0.0.1:0", v4[rand.Intn(len(v4))]},
-		{"IPv6", "[::1]:0", v6[rand.Intn(len(v6))]},
+		{"IPv4", "127.0.0.1:0", v4[rand.IntN(len(v4))]},
+		{"IPv6", "[::1]:0", v6[rand.IntN(len(v6))]},
 	}
 
 	buf := []byte("foobar")
@@ -1166,13 +1163,9 @@ func mustCreateDispatcher(tb testing.TB, netns ns.NetNS) *Dispatcher {
 	return dp
 }
 
-func mustOpenDispatcher(tb testing.TB, logger log.Logger, netns ns.NetNS) *Dispatcher {
+func mustOpenDispatcher(tb testing.TB, netns ns.NetNS) *Dispatcher {
 	tb.Helper()
-
-	if logger == nil {
-		logger = log.Discard
-	}
-
+	
 	dp, err := OpenDispatcher(netns.Path(), "/sys/fs/bpf", false)
 	if err != nil {
 		tb.Fatal("Can't open dispatcher:", err)
@@ -1200,7 +1193,7 @@ func mustReadBindings(tb testing.TB, label string) []*Binding {
 
 	var bindings []*Binding
 	for _, prefixStr := range prefixes {
-		prefix, err := netip.ParsePrefix(prefixStr)
+		prefix, err := ParsePrefix(prefixStr)
 		if err != nil {
 			tb.Fatal(err)
 		}

@@ -3,9 +3,9 @@ package sysconn_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/netip"
+	"os"
 	"syscall"
 	"testing"
 
@@ -177,7 +177,7 @@ func TestLocalAddress(t *testing.T) {
 		})
 	}
 
-	file, err := ioutil.TempFile("", "isomer")
+	file, err := os.CreateTemp("", "isomer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestLocalAddress(t *testing.T) {
 }
 
 func TestListeningSocket(t *testing.T) {
-	file, err := ioutil.TempFile("", "isomer")
+	file, err := os.CreateTemp("", "isomer")
 	if err != nil {
 		t.Fatal(err)
 	}

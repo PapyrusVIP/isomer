@@ -1,7 +1,6 @@
 package lock
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -87,7 +86,7 @@ func TestTryLock(t *testing.T) {
 func mustTempDir(tb testing.TB) func() *os.File {
 	tb.Helper()
 
-	dir, err := ioutil.TempDir("", "isomer")
+	dir, err := os.MkdirTemp("", "isomer")
 	if err != nil {
 		tb.Fatal(err)
 	}
