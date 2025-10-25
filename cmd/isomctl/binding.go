@@ -12,41 +12,44 @@ import (
 )
 
 func bindings(e *env, args ...string) error {
-	set := e.newFlagSet("bindings", "--", "protocol", "ip[/mask]", "port")
+	set := e.newFlagSet("bindings")
 	set.Description = `
 		List bindings which match certain criteria.
 
 		Examples:
 		  $ isomctl bindings
-		  $ isomctl bindings any 127.0.0.0/8
-		  $ isomctl bindings udp ::1 443`
+		  $ isomctl bindings -label foo
+		  $ isomctl bindings -ip 127.0.0.0/8
+		  $ isomctl bindings -protocol udp -ip ::1 -port443`
+	
+	labelFlag := set.String("label", "", "Filter by label")
+	protoFlag := set.String("protocol", "", "Filter by protocol")
+	ipFlag := set.String("ip", "", "Filter by IP address or subnet")
+	portFlag := set.Int("port", 0, "Filter by port")
+
 	if err := set.Parse(args); err != nil {
 		return err
 	}
 
 	var proto internal.Protocol
-	if f := set.Arg(0); set.NArg() >= 1 && f != "any" {
-		if err := proto.UnmarshalText([]byte(f)); err != nil {
+	if *protoFlag != "" {
+		if err := proto.UnmarshalText([]byte(*protoFlag)); err != nil {
 			return fmt.Errorf("parse protocol: %w", err)
 		}
 	}
 
 	var prefix netip.Prefix
 	var err error
-	if set.NArg() >= 2 {
-		prefix, err = internal.ParsePrefix(set.Arg(1))
+	if *ipFlag != "" {
+		prefix, err = internal.ParsePrefix(*ipFlag)
 		if err != nil {
 			return err
 		}
 	}
 
 	var port uint16
-	if set.NArg() >= 3 {
-		port64, err := strconv.ParseUint(set.Arg(2), 10, 16)
-		if err != nil {
-			return fmt.Errorf("port %q: %w", set.Arg(2), err)
-		}
-		port = uint16(port64)
+	if *portFlag != 0 {
+		port = uint16(*portFlag)
 	}
 
 	var bindings internal.Bindings
@@ -67,6 +70,10 @@ func bindings(e *env, args ...string) error {
 
 	var filtered internal.Bindings
 	for _, bind := range bindings {
+		if *labelFlag != "" && bind.Label != *labelFlag {
+			continue
+		}
+
 		if proto != 0 && bind.Protocol != proto {
 			continue
 		}

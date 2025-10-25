@@ -1,6 +1,6 @@
 # isomer
 
-Just like chemical [isomers](https://en.wikipedia.org/wiki/Isomer) share the same molecular formula but differ in structure, [Isomer](https://github.com/PapyrusVIP/isomer) uses the same underlying traffic attributes (like port or IP) to dispatch traffic in different ways.
+Just like chemical [isomers](https://en.wikipedia.org/wiki/Isomer) share the same molecular formula but differ in structure, [isomer](https://github.com/PapyrusVIP/isomer) uses the same underlying traffic attributes (like port or IP) to dispatch traffic in different ways.
 
 Isomer is a flexible eBPF socket dispatcher.
 You can define how traffic is dispatched to processes running on the same machine.
