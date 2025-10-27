@@ -9,7 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.67.1
 	golang.org/x/sys v0.37.0
-	kernel.org/pub/linux/libs/security/libcap/cap v1.2.76
+	kernel.org/pub/linux/libs/security/libcap/cap v1.2.77
 )
 
 require (
@@ -21,5 +21,5 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
-	kernel.org/pub/linux/libs/security/libcap/psx v1.2.76 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.77 // indirect
 )
