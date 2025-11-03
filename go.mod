@@ -3,7 +3,7 @@ module github.com/PapyrusVIP/isomer
 go 1.25.1
 
 require (
-	github.com/cilium/ebpf v0.19.0
+	github.com/cilium/ebpf v0.20.0
 	github.com/containernetworking/plugins v1.8.0
 	github.com/google/go-cmp v0.7.0
 	github.com/prometheus/client_golang v1.23.2
