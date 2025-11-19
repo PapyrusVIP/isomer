@@ -7,7 +7,7 @@ require (
 	github.com/containernetworking/plugins v1.8.0
 	github.com/google/go-cmp v0.7.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/common v0.67.1
+	github.com/prometheus/common v0.67.3
 	golang.org/x/sys v0.37.0
 	kernel.org/pub/linux/libs/security/libcap/cap v1.2.77
 )
